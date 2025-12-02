@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Bebas_Neue } from "next/font/google";
+import { Inter, Roboto_Mono, Bebas_Neue } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/lib/providers";
 import { NetworkChecker } from "@/components/network/NetworkChecker";
 import { Header } from "@/components/layout/Header";
 
-const geistSans = Geist({
+const inter = Inter({
   variable: "--font-geist-sans",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
+const robotoMono = Roboto_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
@@ -21,12 +21,16 @@ const bebasNeue = Bebas_Neue({
   subsets: ["latin"],
 });
 
-const OG_IMAGE_URL = "https://gateway.pinata.cloud/ipfs/bafybeic5xwp2kpoqvc24uvl5upren5t5h473upqxyuu2ui3jedtvruzhru?filename=social.png"
-const SITE_URL = process.env.NEXT_PUBLIC_MINIAPP_URL || "http://localhost:3000"
+const OG_IMAGE_URL =
+  "https://gateway.pinata.cloud/ipfs/bafybeic5xwp2kpoqvc24uvl5upren5t5h473upqxyuu2ui3jedtvruzhru?filename=social.png";
+
+const SITE_URL =
+  process.env.NEXT_PUBLIC_MINIAPP_URL || "http://localhost:3000";
 
 export const metadata: Metadata = {
   title: "DeCleanup Rewards - Tokenize Your Environmental Impact",
-  description: "Join the global cleanup movement. Submit cleanups, earn Impact Products, and make a real difference on Celo.",
+  description:
+    "Join the global cleanup movement. Submit cleanups, earn Impact Products, and make a real difference on Celo.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -37,7 +41,8 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "DeCleanup Rewards - Tokenize Your Environmental Impact",
-    description: "Join the global cleanup movement. Submit cleanups, earn Impact Products, and make a real difference on Celo.",
+    description:
+      "Join the global cleanup movement. Submit cleanups, earn Impact Products, and make a real difference on Celo.",
     url: SITE_URL,
     siteName: "DeCleanup Rewards",
     images: [
@@ -54,7 +59,8 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "DeCleanup Rewards - Tokenize Your Environmental Impact",
-    description: "Join the global cleanup movement. Submit cleanups, earn Impact Products, and make a real difference on Celo.",
+    description:
+      "Join the global cleanup movement. Submit cleanups, earn Impact Products, and make a real difference on Celo.",
     images: [OG_IMAGE_URL],
   },
 };
@@ -81,19 +87,22 @@ export default function RootLayout({
         <meta property="og:image:height" content="630" />
         <meta property="og:image:type" content="image/png" />
         <meta name="twitter:image" content={OG_IMAGE_URL} />
-        <meta name="twitter:image:alt" content="DeCleanup Rewards - Tokenize Your Environmental Impact" />
+        <meta
+          name="twitter:image:alt"
+          content="DeCleanup Rewards - Tokenize Your Environmental Impact"
+        />
       </head>
+
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${bebasNeue.variable} antialiased flex flex-col min-h-screen bg-black`}
+        className={`${inter.variable} ${robotoMono.variable} ${bebasNeue.variable} antialiased flex flex-col min-h-screen bg-black`}
       >
         <Providers>
           <NetworkChecker />
           <Header />
-          <main className="flex-1">
-            {children}
-          </main>
+          <main className="flex-1">{children}</main>
         </Providers>
       </body>
     </html>
   );
 }
+
