@@ -10,10 +10,7 @@ describe("DCURewardManager", function () {
     const publicClient = await hre.viem.getPublicClient();
 
     // Deploy DCU token with owner as temporary reward logic
-    const maxSupply = 1000000n * 10n ** 18n; // 1 million tokens with 18 decimals
-    const dcuToken = await hre.viem.deployContract("DCUToken", [
-      owner.account.address, // Use owner as temporary reward logic
-    ]);
+    const dcuToken = await hre.viem.deployContract("DCUToken");
 
     // Deploy DCURewardManager with temporary NFT address
     const dcuRewardManager = await hre.viem.deployContract("DCURewardManager", [
@@ -31,8 +28,9 @@ describe("DCURewardManager", function () {
       account: owner.account,
     });
 
-    // Update the reward logic contract address in DCUToken to DCURewardManager
-    await dcuToken.write.updateRewardLogicContract([dcuRewardManager.address], {
+    // Grant the MINTER_ROLE to the DCURewardManager contract
+    const MINTER_ROLE = await dcuToken.read.MINTER_ROLE();
+    await dcuToken.write.grantRole([MINTER_ROLE, dcuRewardManager.address], {
       account: owner.account,
     });
 
@@ -40,9 +38,6 @@ describe("DCURewardManager", function () {
     await impactProductNft.write.setRewardsContract([dcuRewardManager.address], {
       account: owner.account,
     });
-
-    // Transfer ownership to DCURewardManager for additional management
-    await dcuToken.write.transferOwnership([dcuRewardManager.address]);
 
     return {
       dcuToken,

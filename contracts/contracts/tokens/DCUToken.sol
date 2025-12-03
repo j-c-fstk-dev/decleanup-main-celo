@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 
@@ -11,12 +11,11 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
  * @dev DeCleanup Utility Token with dynamic supply model and governance features
  * Implements ERC20 standard with additional features for tracking and compatibility
  */
-contract DCUToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
+contract DCUToken is ERC20, ERC20Burnable, ERC20Permit, AccessControl {
     // Custom errors
-    error TOKEN__InvalidRewardLogicAddress(address invalidAddress);
-    error TOKEN__OnlyRewardLogicCanMint(address caller, address rewardLogic);
     error TOKEN__SupplyCapExceeded(uint256 attemptedSupply, uint256 supplyCap);
     error TOKEN__CapTooLow(uint256 requestedCap, uint256 currentSupply);
+    error TOKEN__Unauthorized(address sender);
 
     // Events for detailed tracking
     event DCUMinted(
@@ -33,12 +32,6 @@ contract DCUToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         uint256 timestamp
     );
     
-    event RewardLogicContractUpdated(
-        address indexed oldRewardLogic,
-        address indexed newRewardLogic,
-        uint256 timestamp
-    );
-    
     event SupplyCapAdded(
         uint256 capAmount,
         uint256 timestamp,
@@ -49,9 +42,10 @@ contract DCUToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
         uint256 timestamp,
         address indexed by
     );
+
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     
     // State variables
-    address public rewardLogicContract;
     uint256 public totalMinted;
     uint256 public supplyCap;
     bool public supplyCapActive;
@@ -61,17 +55,13 @@ contract DCUToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
     
     /**
      * @dev Constructor for DCUToken
-     * @param _rewardLogicContract Address of the reward logic contract
      */
-    constructor(address _rewardLogicContract) 
+    constructor() 
         ERC20("DeCleanup Utility Token", "DCU") 
         ERC20Permit("DeCleanup Utility Token")
-        Ownable(msg.sender) 
     {
-        if (_rewardLogicContract == address(0)) 
-            revert TOKEN__InvalidRewardLogicAddress(_rewardLogicContract);
-        
-        rewardLogicContract = _rewardLogicContract;
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(MINTER_ROLE, msg.sender); // Grant minter role to deployer initially
         supplyCapActive = false; // Start with no supply cap
     }
     
@@ -84,34 +74,12 @@ contract DCUToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
     }
     
     /**
-     * @dev Modifier to restrict minting to only RewardLogic contract
-     */
-    modifier onlyRewardLogic() {
-        if (msg.sender != rewardLogicContract) 
-            revert TOKEN__OnlyRewardLogicCanMint(msg.sender, rewardLogicContract);
-        _;
-    }
-    
-    /**
-     * @dev Update the reward logic contract address
-     * @param _newRewardLogicContract The new reward logic contract address
-     */
-    function updateRewardLogicContract(address _newRewardLogicContract) external onlyOwner {
-        if (_newRewardLogicContract == address(0)) 
-            revert TOKEN__InvalidRewardLogicAddress(_newRewardLogicContract);
-            
-        address oldRewardLogic = rewardLogicContract;
-        rewardLogicContract = _newRewardLogicContract;
-        emit RewardLogicContractUpdated(oldRewardLogic, _newRewardLogicContract, block.timestamp);
-    }
-
-    /**
      * @dev Mint new tokens - only callable by the RewardLogic contract
      * @param to The address to mint tokens to
      * @param amount The amount of tokens to mint
      * @return success Whether the minting was successful
      */
-    function mint(address to, uint256 amount) external onlyRewardLogic returns (bool) {
+    function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) returns (bool) {
         // If a supply cap is active, enforce it
         if (supplyCapActive) {
             if (totalSupply() + amount > supplyCap)
@@ -140,7 +108,7 @@ contract DCUToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
      * @param from The address to burn tokens from
      * @param amount The amount of tokens to burn
      */
-    function burn(address from, uint256 amount) external onlyOwner {
+    function burn(address from, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _burn(from, amount);
         
         // Emit detailed burning event
@@ -156,7 +124,7 @@ contract DCUToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
      * @dev Set a cap on the total token supply (for future governance)
      * @param _supplyCap The maximum total supply
      */
-    function setSupplyCap(uint256 _supplyCap) external onlyOwner {
+    function setSupplyCap(uint256 _supplyCap) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_supplyCap <= totalSupply())
             revert TOKEN__CapTooLow(_supplyCap, totalSupply());
             
@@ -169,7 +137,7 @@ contract DCUToken is ERC20, ERC20Burnable, ERC20Permit, Ownable {
     /**
      * @dev Remove the supply cap to allow unlimited minting
      */
-    function removeSupplyCap() external onlyOwner {
+    function removeSupplyCap() external onlyRole(DEFAULT_ADMIN_ROLE) {
         supplyCapActive = false;
         emit SupplyCapRemoved(block.timestamp, msg.sender);
     }

@@ -20,7 +20,8 @@ contract DCURewardManager is Ownable, ReentrancyGuard {
         Referral,
         ImpactReport,
         Verifier,
-        Hypercert
+        Hypercert,
+        Submission
     }
 
     struct UserRewardStats {
@@ -265,6 +266,10 @@ contract DCURewardManager is Ownable, ReentrancyGuard {
         hypercertRewardsClaimed[claimKey] = true;
         _addReward(msg.sender, hypercertBonus, RewardSource.Hypercert);
         emit HypercertRewardClaimed(msg.sender, hypercertNumber, hypercertBonus);
+    }
+
+    function distributeRewards(address user, uint256 amount) external onlySubmissionOrOwner {
+        _addReward(user, amount, RewardSource.Submission);
     }
 
     // ----------- Claiming -----------

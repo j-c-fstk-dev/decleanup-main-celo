@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "./interfaces/IDCUToken.sol";
-import "./interfaces/IRewards.sol";
 import "./DCURewardManager.sol";
 
 // Interface for RecyclablesReward contract
@@ -72,9 +71,6 @@ contract Submission is Ownable, ReentrancyGuard, AccessControl {
     // Reference to the DCU token contract for rewards
     IDCUToken public dcuToken;
     
-    // Reference to the RewardLogic contract
-    IRewards public rewardLogic;
-    
     // Reference to the DCURewardManager contract
     DCURewardManager public rewardManager;
     
@@ -89,9 +85,6 @@ contract Submission is Ownable, ReentrancyGuard, AccessControl {
     
     // Mapping from user address to their submission IDs
     mapping(address => uint256[]) public userSubmissions;
-    
-    // Mapping from user address to claimable rewards amount
-    mapping(address => uint256) public claimableRewards;
     
     // Total number of submissions
     uint256 public submissionCount;
@@ -138,12 +131,6 @@ contract Submission is Ownable, ReentrancyGuard, AccessControl {
     
     event DefaultRewardUpdated(uint256 oldAmount, uint256 newAmount);
     
-    event RewardClaimed(
-        address indexed user,
-        uint256 amount,
-        uint256 timestamp
-    );
-    
     event RewardAvailable(
         address indexed user,
         uint256 amount,
@@ -160,19 +147,16 @@ contract Submission is Ownable, ReentrancyGuard, AccessControl {
     event RecyclablesRewardContractUpdated(address indexed oldContract, address indexed newContract);
     
     /**
-     * @dev Constructor sets up the contract with DCU token, RewardLogic, DCURewardManager, and roles
+     * @dev Constructor sets up the contract with DCU token, DCURewardManager, and roles
      * @param _dcuToken Address of the DCU token contract
-     * @param _rewardLogic Address of the RewardLogic contract
      * @param _rewardManager Address of the DCURewardManager contract
      * @param _defaultRewardAmount Default reward amount for approved submissions
      */
-    constructor(address _dcuToken, address _rewardLogic, address _rewardManager, uint256 _defaultRewardAmount) Ownable(msg.sender) {
+    constructor(address _dcuToken, address _rewardManager, uint256 _defaultRewardAmount) Ownable(msg.sender) {
         if (_dcuToken == address(0)) revert SUBMISSION__InvalidAddress();
-        if (_rewardLogic == address(0)) revert SUBMISSION__InvalidAddress();
         if (_rewardManager == address(0)) revert SUBMISSION__InvalidAddress();
         
         dcuToken = IDCUToken(_dcuToken);
-        rewardLogic = IRewards(_rewardLogic);
         rewardManager = DCURewardManager(_rewardManager);
         defaultRewardAmount = _defaultRewardAmount;
         
@@ -347,7 +331,7 @@ contract Submission is Ownable, ReentrancyGuard, AccessControl {
         // Add to claimable rewards (user will claim manually)
         if (!submission.rewarded) {
             submission.rewarded = true;
-            claimableRewards[submission.submitter] += defaultRewardAmount;
+            rewardManager.distributeRewards(submission.submitter, defaultRewardAmount);
             
             emit RewardAvailable(
                 submission.submitter,
@@ -385,35 +369,6 @@ contract Submission is Ownable, ReentrancyGuard, AccessControl {
         }
     }
     
-    /**
-     * @dev Claim available rewards
-     */
-    function claimRewards() external nonReentrant {
-        uint256 amount = claimableRewards[msg.sender];
-        if (amount == 0) revert SUBMISSION__NoRewardsAvailable();
-        
-        // Reset claimable rewards before external calls
-        claimableRewards[msg.sender] = 0;
-        
-        // Distribute the rewards through RewardLogic and check the return value
-        bool success = rewardLogic.distributeDCU(msg.sender, amount);
-        require(success, "Reward distribution failed");
-        
-        emit RewardClaimed(
-            msg.sender,
-            amount,
-            block.timestamp
-        );
-    }
-    
-    /**
-     * @dev Get available claimable rewards for a user
-     * @param user The user address to check
-     * @return amount The amount of claimable rewards
-     */
-    function getClaimableRewards(address user) external view returns (uint256) {
-        return claimableRewards[user];
-    }
     
     /**
      * @dev Reject a submission (only for admins)
@@ -476,15 +431,6 @@ contract Submission is Ownable, ReentrancyGuard, AccessControl {
         treasury = newTreasury;
         
         emit TreasuryUpdated(oldTreasury, newTreasury);
-    }
-    
-    /**
-     * @dev Update the RewardLogic contract address (only for owner)
-     * @param _newRewardLogic The new RewardLogic contract address
-     */
-    function updateRewardLogic(address _newRewardLogic) external onlyOwner {
-        if (_newRewardLogic == address(0)) revert SUBMISSION__InvalidAddress();
-        rewardLogic = IRewards(_newRewardLogic);
     }
     
     /**
@@ -563,4 +509,4 @@ contract Submission is Ownable, ReentrancyGuard, AccessControl {
         
         return result;
     }
-} 
+}

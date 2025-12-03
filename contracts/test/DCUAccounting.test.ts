@@ -9,10 +9,7 @@ describe("DCUAccounting", function () {
     const publicClient = await hre.viem.getPublicClient();
 
     // Deploy DCUToken with the owner as the reward logic address
-    const rewardLogicAddress = owner.account.address;
-    const dcuToken = await hre.viem.deployContract("DCUToken", [
-      rewardLogicAddress,
-    ]);
+    const dcuToken = await hre.viem.deployContract("DCUToken");
 
     const dcuAccounting = await hre.viem.deployContract("DCUAccounting", [
       dcuToken.address,
@@ -20,24 +17,15 @@ describe("DCUAccounting", function () {
 
     // Mint some tokens to users and owner
     await dcuToken.write.mint(
-      [getAddress(user1.account.address), 1000n * 10n ** 18n],
-      {
-        account: owner.account,
-      }
+      [user1.account.address, 1000n * 10n ** 18n]
     );
 
     await dcuToken.write.mint(
-      [getAddress(user2.account.address), 1000n * 10n ** 18n],
-      {
-        account: owner.account,
-      }
+      [user2.account.address, 1000n * 10n ** 18n]
     );
 
     await dcuToken.write.mint(
-      [getAddress(owner.account.address), 1000n * 10n ** 18n],
-      {
-        account: owner.account,
-      }
+      [owner.account.address, 1000n * 10n ** 18n]
     );
 
     return {
@@ -66,7 +54,7 @@ describe("DCUAccounting", function () {
       });
 
       const balance = await dcuAccounting.read.balances([
-        getAddress(user1.account.address),
+        user1.account.address,
       ]);
       expect(balance).to.equal(amount);
 
@@ -99,7 +87,7 @@ describe("DCUAccounting", function () {
       });
 
       const balance = await dcuAccounting.read.balances([
-        getAddress(user1.account.address),
+        user1.account.address,
       ]);
       expect(balance).to.equal(0n);
 
@@ -167,12 +155,12 @@ describe("DCUAccounting", function () {
       });
 
       await dcuAccounting.write.depositFor(
-        [getAddress(user1.account.address), amount],
+        [user1.account.address, amount],
         { account: owner.account }
       );
 
       const balance = await dcuAccounting.read.balances([
-        getAddress(user1.account.address),
+        user1.account.address,
       ]);
       expect(balance).to.equal(amount);
 
@@ -198,18 +186,18 @@ describe("DCUAccounting", function () {
       });
 
       await dcuAccounting.write.depositFor(
-        [getAddress(user1.account.address), amount],
+        [user1.account.address, amount],
         { account: owner.account }
       );
 
       // Now withdraw on behalf of the user
       await dcuAccounting.write.withdrawFor(
-        [getAddress(user1.account.address), amount],
+        [user1.account.address, amount],
         { account: owner.account }
       );
 
       const balance = await dcuAccounting.read.balances([
-        getAddress(user1.account.address),
+        user1.account.address,
       ]);
       expect(balance).to.equal(0n);
 
@@ -230,7 +218,7 @@ describe("DCUAccounting", function () {
 
       await expect(
         dcuAccounting.write.depositFor(
-          [getAddress(user2.account.address), amount],
+          [user2.account.address, amount],
           { account: user1.account }
         )
       ).to.be.rejected;
@@ -247,14 +235,14 @@ describe("DCUAccounting", function () {
       });
 
       await dcuAccounting.write.depositFor(
-        [getAddress(user2.account.address), amount],
+        [user2.account.address, amount],
         { account: owner.account }
       );
 
       // Try to withdraw as non-owner
       await expect(
         dcuAccounting.write.withdrawFor(
-          [getAddress(user2.account.address), amount],
+          [user2.account.address, amount],
           { account: user1.account }
         )
       ).to.be.rejected;
@@ -279,7 +267,7 @@ describe("DCUAccounting", function () {
 
       // Get owner's initial balance
       const initialOwnerBalance = await dcuToken.read.balanceOf([
-        getAddress(owner.account.address),
+        owner.account.address,
       ]);
 
       // Perform emergency withdrawal
@@ -289,7 +277,7 @@ describe("DCUAccounting", function () {
 
       // Check owner's new balance
       const newOwnerBalance = await dcuToken.read.balanceOf([
-        getAddress(owner.account.address),
+        owner.account.address,
       ]);
       expect(newOwnerBalance).to.equal(initialOwnerBalance + amount);
 
@@ -341,12 +329,12 @@ describe("DCUAccounting", function () {
 
       // Check individual balances
       const balance1 = await dcuAccounting.read.balances([
-        getAddress(user1.account.address),
+        user1.account.address,
       ]);
       expect(balance1).to.equal(amount1);
 
       const balance2 = await dcuAccounting.read.balances([
-        getAddress(user2.account.address),
+        user2.account.address,
       ]);
       expect(balance2).to.equal(amount2);
 
@@ -362,7 +350,7 @@ describe("DCUAccounting", function () {
 
       // Check updated balances
       const updatedBalance1 = await dcuAccounting.read.balances([
-        getAddress(user1.account.address),
+        user1.account.address,
       ]);
       expect(updatedBalance1).to.equal(amount1 - withdrawAmount);
 
@@ -385,7 +373,7 @@ describe("DCUAccounting", function () {
       });
 
       const balance = await dcuAccounting.read.getBalance([
-        getAddress(user1.account.address),
+        user1.account.address,
       ]);
       expect(balance).to.equal(amount);
     });
@@ -426,7 +414,7 @@ describe("DCUAccounting", function () {
 
       // Add user1 to whitelist
       await dcuAccounting.write.addToWhitelist(
-        [getAddress(user1.account.address)],
+        [user1.account.address],
         {
           account: owner.account,
         }
@@ -434,7 +422,7 @@ describe("DCUAccounting", function () {
 
       // Verify user1 is whitelisted
       const isWhitelisted = await dcuAccounting.read.isWhitelisted([
-        getAddress(user1.account.address),
+        user1.account.address,
       ]);
       expect(isWhitelisted).to.equal(true);
 
@@ -453,7 +441,7 @@ describe("DCUAccounting", function () {
       });
 
       const balance = await dcuAccounting.read.balances([
-        getAddress(user1.account.address),
+        user1.account.address,
       ]);
       expect(balance).to.equal(0n);
     });
@@ -488,7 +476,7 @@ describe("DCUAccounting", function () {
       });
 
       const balance = await dcuAccounting.read.balances([
-        getAddress(user1.account.address),
+        user1.account.address,
       ]);
       expect(balance).to.equal(0n);
     });
@@ -502,7 +490,7 @@ describe("DCUAccounting", function () {
 
       // Add user1 to whitelist
       await dcuAccounting.write.addToWhitelist(
-        [getAddress(user1.account.address)],
+        [user1.account.address],
         {
           account: owner.account,
         }
@@ -510,13 +498,13 @@ describe("DCUAccounting", function () {
 
       // Verify user1 is whitelisted
       let isWhitelisted = await dcuAccounting.read.isWhitelisted([
-        getAddress(user1.account.address),
+        user1.account.address,
       ]);
       expect(isWhitelisted).to.equal(true);
 
       // Remove user1 from whitelist
       await dcuAccounting.write.removeFromWhitelist(
-        [getAddress(user1.account.address)],
+        [user1.account.address],
         {
           account: owner.account,
         }
@@ -524,7 +512,7 @@ describe("DCUAccounting", function () {
 
       // Verify user1 is no longer whitelisted
       isWhitelisted = await dcuAccounting.read.isWhitelisted([
-        getAddress(user1.account.address),
+        user1.account.address,
       ]);
       expect(isWhitelisted).to.equal(false);
     });
@@ -536,7 +524,7 @@ describe("DCUAccounting", function () {
 
       await expect(
         dcuAccounting.write.addToWhitelist(
-          [getAddress(user2.account.address)],
+          [user2.account.address],
           {
             account: user1.account,
           }
@@ -545,7 +533,7 @@ describe("DCUAccounting", function () {
 
       // Owner adds user2 to whitelist
       await dcuAccounting.write.addToWhitelist(
-        [getAddress(user2.account.address)],
+        [user2.account.address],
         {
           account: owner.account,
         }
@@ -553,7 +541,7 @@ describe("DCUAccounting", function () {
 
       await expect(
         dcuAccounting.write.removeFromWhitelist(
-          [getAddress(user2.account.address)],
+          [user2.account.address],
           {
             account: user1.account,
           }
@@ -581,18 +569,18 @@ describe("DCUAccounting", function () {
       // User1 transfers internally to user2
       const transferAmount = 50n * 10n ** 18n; // 50 tokens
       await dcuAccounting.write.internalTransfer(
-        [getAddress(user2.account.address), transferAmount],
+        [user2.account.address, transferAmount],
         { account: user1.account }
       );
 
       // Check balances
       const user1Balance = await dcuAccounting.read.balances([
-        getAddress(user1.account.address),
+        user1.account.address,
       ]);
       expect(user1Balance).to.equal(amount - transferAmount);
 
       const user2Balance = await dcuAccounting.read.balances([
-        getAddress(user2.account.address),
+        user2.account.address,
       ]);
       expect(user2Balance).to.equal(transferAmount);
 
@@ -609,7 +597,7 @@ describe("DCUAccounting", function () {
       const transferAmount = 50n * 10n ** 18n; // 50 tokens
       await expect(
         dcuAccounting.write.internalTransfer(
-          [getAddress(user2.account.address), transferAmount],
+          [user2.account.address, transferAmount],
           { account: user1.account }
         )
       ).to.be.rejectedWith("Insufficient balance");
