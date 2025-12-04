@@ -1,9 +1,12 @@
-import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
+import {
+  buildModule,
+  ModuleBuilder,
+} from "@nomicfoundation/hardhat-ignition/modules";
 
 /**
  * Ignition module for deploying all DCU contracts
  */
-export default buildModule("DCUContracts", (m) => {
+export default buildModule("DCUContracts", (m: ModuleBuilder) => {
   // Deploy the DCUStorage contract first
   const dcuStorage = m.contract("DCUStorage");
 
@@ -34,7 +37,7 @@ export default buildModule("DCUContracts", (m) => {
   // Deploy the Submission contract
   const submission = m.contract("Submission", [
     dcuToken,
-    dcuRewardManager, // DCURewardManager address (required for verifier rewards)
+    dcuRewardManager,
     "10000000000000000000", // 10 DCU default reward (in wei)
   ]);
 

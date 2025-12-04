@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node", "mocha", "chai", "hardhat"]
+  },
+  "include": [
+    "hardhat.config.ts",
+    "scripts/**/*.ts",
+    "contracts/**/*.sol",
+    "contracts/**/*.ts",
+    "test/**/*.ts"
+  ]
+}
