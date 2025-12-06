@@ -14,6 +14,6 @@
     "scripts/**/*.ts",
     "contracts/**/*.sol",
     "contracts/**/*.ts",
-    "test/**/*.ts"
+    "contracts/test/**/*.ts"
   ]
 }
