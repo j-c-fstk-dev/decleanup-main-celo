@@ -1,4 +1,3 @@
-CHANGELOG.md
 Changelog
 
 All notable changes to this project will be documented in this file.
@@ -6,138 +5,94 @@ All notable changes to this project will be documented in this file.
 This project adheres to Semantic Versioning
 .
 
-[0.2.0] – 2025-12-02
+[0.2.0] – 2025-12-02  
 🚀 Major Refactor: Unified Reward System
 
 This release removes the legacy reward engine, consolidates all reward logic under DCURewardManager, and updates the entire test suite to reflect the new architecture.
 
 Removed
 
-RewardLogic.sol
+- RewardLogic.sol  
+  Fully removed from the codebase  
+  All imports, references, and test files deleted
 
-Fully removed from the codebase
+- Removed deprecated functions in Submission.sol:  
+  claimRewards  
+  claimableRewards  
+  getClaimableRewards  
+  RewardClaimed event
 
-All imports, references, and test files deleted
-
-Removed deprecated functions in Submission.sol:
-
-claimRewards
-
-claimableRewards
-
-getClaimableRewards
-
-RewardClaimed event
-
-Removed legacy reward pathways across the contracts and tests
-
-Removed unused/legacy scripts related to RewardLogic
+- Removed legacy reward pathways across the contracts and tests  
+- Removed unused/legacy scripts related to RewardLogic
 
 Added
 
-New external function in DCURewardManager:
-distributeRewards(address submissionId, address user)
+- New external function in DCURewardManager:  
+  `distributeRewards(address submissionId, address user)`  
+  Centralizes reward minting and distribution  
+  Replaces the old dual reward flow
 
-Centralizes reward minting and distribution
+- Added new RewardSource.Submission enum entry  
+- Added utilities and helpers inside the tests to support the new reward flow  
+- Added constructor role setup for DCUToken (MINTER_ROLE)
 
-Replaces the old dual reward flow
-
-Added new RewardSource.Submission enum entry
-
-Added utilities and helpers inside the tests to support the new reward flow
-
-Added constructor role setup for DCUToken (MINTER_ROLE)
-
-Changed
+Changed  
 Contracts
 
-Submission.sol
+**Submission.sol**
+- Fully migrated to use rewardManager.distributeRewards()
+- Removed internal state that previously tracked pending rewards
+- Submission events and logic updated to reflect unified reward flow
 
-Fully migrated to use rewardManager.distributeRewards()
+**DCURewardManager.sol**
+- Integrated reward calculation and minting logic
+- Updated reward breakdown, eligibility checks, referral logic, verifier reward logic, and POI reward rules
+- Ensured data consistency and single-source-of-truth architecture
 
-Removed internal state that previously tracked pending rewards
+**DCUToken.sol**
+- Removed legacy logic tied to RewardLogic
+- Cleaned constructor
+- Added MINTER_ROLE for RewardManager
 
-Submission events and logic updated to reflect unified reward flow
+**ImpactProductNFT.sol**
+- Updated minting flow to align with new reward system
 
-DCURewardManager.sol
+Deployment scripts  
+contracts/ignition/modules/DCUContracts.ts  
+- Removed RewardLogic deployment  
+- Added consistent role assignments  
+- Updated constructor params and wiring for new reward architecture
 
-Integrated reward calculation and minting logic
-
-Updated reward breakdown, eligibility checks, referral logic, verifier reward logic, and POI reward rules
-
-Ensured data consistency and single-source-of-truth architecture
-
-DCUToken.sol
-
-Removed legacy logic tied to RewardLogic
-
-Cleaned constructor
-
-Added MINTER_ROLE for RewardManager
-
-ImpactProductNFT.sol
-
-Updated minting flow to align with new reward system
-
-Deployment scripts
-
-contracts/ignition/modules/DCUContracts.ts
-
-Removed RewardLogic deployment
-
-Added consistent role assignments
-
-Updated constructor params and wiring for new reward architecture
-
-Tests
-
+Tests  
 Entire test suite updated and migrated to new viem-based flow:
 
-Submission.test.ts
+- Submission.test.ts  
+- DCURewardManager.test.ts  
+- DCUToken.test.ts  
+- ImpactProductNFT.test.ts  
+- InputValidation.test.ts  
+- RewardEvents.test.ts  
+- VerificationSequence.test.ts  
 
-DCURewardManager.test.ts
+- Fixed broken mocks, address casing, event listeners, constructor assertions  
+- Updated simulations and expected flows to match new architecture  
+- All tests now pass with the updated reward system
 
-DCUToken.test.ts
+Security & Logic Improvements  
+- Centralized all token minting under a single trusted contract (DCURewardManager)  
+- Removed legacy mint paths that could allow inconsistencies or double-mint  
+- Reduced attack surface by removing redundant state and duplicated logic  
+- Improved auditability and predictability of reward calculations
 
-ImpactProductNFT.test.ts
-
-InputValidation.test.ts
-
-RewardEvents.test.ts
-
-VerificationSequence.test.ts
-
-Fixed broken mocks, address casing, event listeners, constructor assertions
-
-Updated simulations and expected flows to match new architecture
-
-All tests now pass with the updated reward system
-
-Security & Logic Improvements
-
-Centralized all token minting under a single trusted contract (DCURewardManager)
-
-Removed legacy mint paths that could allow inconsistencies or double-mint
-
-Reduced attack surface by removing redundant state and duplicated logic
-
-Improved auditability and predictability of reward calculations
-
-Notes
-
+Notes  
 This refactor brings the smart contracts much closer to mainnet readiness and reduces complexity by unifying the reward architecture.
 
-Next Version (0.2.1 – unreleased)
-
-Fix remaining TypeScript warnings in tests
-
-Additional refactor for Submission events
-
-Integration of frontend changes with unified reward system
-
+Next Version (0.2.1 – unreleased)  
+- Fix remaining TypeScript warnings in tests  
+- Additional refactor for Submission events  
+- Integration of frontend changes with unified reward system
 
 ___
-
 
 ## [Unreleased] – Sprint 1 Progress
 
@@ -176,3 +131,41 @@ ___
   - Update treasuries  
   - Grant core roles  
   - Validate addresses and critical configuration  
+
+---
+
+## [Sprint 1 – Backend Stabilization] – 2025-12-10
+
+### Added
+- Referral reward variable fully implemented and used in reward path  
+- VERIFIER_ROLE setup fixed in scripts and tests  
+- Hypercert eligibility updated to depend exclusively on ImpactProductNFT level  
+- New test scenarios covering approval → reward → claim flow  
+- Expanded Submission and RewardManager integration tests (viem)
+
+### Changed
+- setup-roles.ts updated to assign:
+  - Only VERIFIER_ROLE to verifiers  
+  - ADMIN_ROLE only to deployer  
+- Submission approval flow cleaned and verified  
+- RewardManager: referral, verifier and impactReport reward systems fully aligned
+
+### Fixed
+- All Submission.sol tests now passing  
+- Recyclables path corrected  
+- No remaining fee logic in any contract  
+- Reward distribution consistent across all flows
+
+### Removed
+- Legacy Submission fee storage logic from functional flow  
+- Hardcoded referral reward branches  
+- Old implicit eligibility checks based on cleanupCount
+
+### Security
+- Strict role separation (admin vs verifier)  
+- Only RewardManager may mint  
+- Submission cannot trigger any privileged actions  
+- Hypercert eligibility now uses a single consistent source of truth
+
+All backend components are now **stable, consistent, and testnet-ready** pending frontend integration.
+
