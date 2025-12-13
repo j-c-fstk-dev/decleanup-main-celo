@@ -21,13 +21,14 @@ import {
   Copy,
 } from 'lucide-react'
 import Link from 'next/link'
-import { getDCUBalance, getStakedDCU, getUserLevel, getUserTokenId, getTokenURI, getTokenURIForLevel, getStreakCount, hasActiveStreak, getCleanupStatus, claimImpactProductFromVerification, CONTRACT_ADDRESSES } from '@/lib/blockchain/contracts'
+import { getDCUBalance, getStakedDCU, getUserLevel, getTokenURI, getTokenURIForLevel, getStreakCount, hasActiveStreak, claimImpactProductFromVerification,} from '@/lib/blockchain/contracts'
 import { REQUIRED_BLOCK_EXPLORER_URL, REQUIRED_CHAIN_ID, REQUIRED_CHAIN_NAME } from '@/lib/blockchain/wagmi'
 import { useChainId } from 'wagmi'
 import { DashboardPersonalStats } from '@/components/dashboard/DashboardPersonalStats'
 import { DashboardImpactProduct } from '@/components/dashboard/DashboardImpactProduct'
 import { DashboardActions } from '@/components/dashboard/DashboardActions'
-
+import { getUserCleanupStatus } from '@/lib/blockchain/verification'
+import { CONTRACT_ADDRESSES } from '@/lib/blockchain/wagmi'
 const BLOCK_EXPLORER_NAME = REQUIRED_BLOCK_EXPLORER_URL.includes('sepolia')
   ? 'CeloScan (Sepolia)'
   : 'CeloScan'
@@ -126,18 +127,11 @@ export default function ProfilePage() {
 
         if (level > 0) {
           try {
-            tokenId = await getUserTokenId(userAddress)
+            // ImpactProductNFT not part of this milestone (no tokenId on-chain).
+// Use level-based metadata only.
+tokenId = null
+tokenURI = await getTokenURIForLevel(level)
 
-            if (tokenId > BigInt(0)) {
-              try {
-                tokenURI = await getTokenURI(tokenId)
-              } catch (error) {
-                console.warn('Failed to get tokenURI from tokenId, using level-based URI:', error)
-                tokenURI = await getTokenURIForLevel(level)
-              }
-            } else {
-              tokenURI = await getTokenURIForLevel(level)
-            }
 
             const convertIPFSToGateway = (ipfsUrl: string, gateways?: string[]) => {
               if (!ipfsUrl.startsWith('ipfs://')) {
@@ -257,19 +251,20 @@ export default function ProfilePage() {
         }
 
         setProfileData({
-          dcuBalance,
-          stakedDCU,
-          level,
-          streak,
+          dcuBalance: Number(dcuBalance),
+          stakedDCU: Number(stakedDCU),
+          level: Number(level),
+          streak: Number(streak),
           hasActiveStreak: activeStreak,
           tokenURI,
           imageUrl,
           animationUrl,
           metadata,
-          tokenId,
+          tokenId, // continua bigint | null (ok)
           impactValue,
           dcuReward,
         })
+        
       } catch (error) {
         console.error('Error fetching profile data:', error)
         setProfileData({
@@ -315,98 +310,48 @@ export default function ProfilePage() {
     }
   }, [address, isConnected, loadProfileData])
 
-  // Check for pending cleanup status
-  useEffect(() => {
-    if (!isConnected || !address) {
-      setCleanupStatus(null)
-      return
-    }
+  // Check for pending cleanup status (single source of truth = verification.ts)
+useEffect(() => {
+  if (!isConnected || !address) {
+    setCleanupStatus(null)
+    return
+  }
 
-    async function checkCleanupStatus() {
-      try {
-        if (!address) {
-          setCleanupStatus(null)
-          return
-        }
+  let cancelled = false
 
-        // Check localStorage for pending cleanup ID (scoped to user address)
-        if (typeof window !== 'undefined') {
-          const pendingKey = `pending_cleanup_id_${address.toLowerCase()}`
-          const pendingCleanupId = localStorage.getItem(pendingKey)
+  async function refresh() {
+    try {
+      const status = await getUserCleanupStatus(address as Address)
 
-          if (pendingCleanupId) {
-            setCleanupStatus({ cleanupId: BigInt(pendingCleanupId), verified: false, claimed: false, level: 0, loading: true })
+      if (cancelled) return
 
-            try {
-              const status = await getCleanupStatus(BigInt(pendingCleanupId))
-
-              // Verify this cleanup belongs to the current user
-              if (status.user.toLowerCase() !== address.toLowerCase()) {
-                console.log('Cleanup belongs to different user, clearing localStorage')
-                localStorage.removeItem(pendingKey)
-                localStorage.removeItem(`pending_cleanup_location_${address.toLowerCase()}`)
-                setCleanupStatus(null)
-                return
-              }
-
-              // Check if cleanup is rejected - if so, clear localStorage and allow new submission
-              if (status.rejected) {
-                console.log('Cleanup is rejected, clearing localStorage to allow new submission')
-                localStorage.removeItem(pendingKey)
-                localStorage.removeItem(`pending_cleanup_location_${address.toLowerCase()}`)
-                setCleanupStatus(null)
-                return
-              }
-
-              setCleanupStatus({
-                cleanupId: BigInt(pendingCleanupId),
-                verified: status.verified,
-                claimed: status.claimed,
-                level: status.level,
-                loading: false,
-              })
-
-              // If verified and claimed, remove from localStorage
-              if (status.verified && status.claimed) {
-                localStorage.removeItem(pendingKey)
-                localStorage.removeItem(`pending_cleanup_location_${address.toLowerCase()}`)
-                // Clear cleanup status after a moment to hide the card
-                setTimeout(() => setCleanupStatus(null), 2000)
-              }
-            } catch (error: any) {
-              console.error('Error fetching cleanup status:', error)
-              // If cleanup doesn't exist (e.g., from old contract or new empty contract), clear localStorage
-              const errorMessage = error?.message || String(error)
-              if (errorMessage.includes('does not exist') || errorMessage.includes('revert')) {
-                console.log('Cleanup not found in contract, clearing localStorage...')
-                localStorage.removeItem(pendingKey)
-                localStorage.removeItem(`pending_cleanup_location_${address.toLowerCase()}`)
-                setCleanupStatus(null)
-              } else {
-                setCleanupStatus(prev => prev ? { ...prev, loading: false } : null)
-              }
-            }
-          } else {
-            // Check and clear old global keys for backward compatibility
-            const oldPendingId = localStorage.getItem('pending_cleanup_id')
-            if (oldPendingId) {
-              localStorage.removeItem('pending_cleanup_id')
-              localStorage.removeItem('pending_cleanup_location')
-            }
-            setCleanupStatus(null)
-          }
-        }
-      } catch (error) {
-        console.error('Error checking cleanup status:', error)
+      if (!status.hasPendingCleanup || !status.cleanupId) {
         setCleanupStatus(null)
+        return
       }
-    }
 
-    checkCleanupStatus()
-    // Poll for status updates every 10 seconds
-    const interval = setInterval(checkCleanupStatus, 10000)
-    return () => clearInterval(interval)
-  }, [address, isConnected])
+      // Map verification.ts status -> profile cleanupStatus shape
+      setCleanupStatus({
+        cleanupId: status.cleanupId,
+        verified: Boolean(status.canClaim), // approved & not claimed
+        claimed: false, // we don't track claimed here; claim clears pending
+        level: 0,
+        loading: false,
+      })
+    } catch (error) {
+      console.error('Error checking cleanup status:', error)
+      if (!cancelled) setCleanupStatus(null)
+    }
+  }
+
+  refresh()
+  const interval = setInterval(refresh, 10000)
+  return () => {
+    cancelled = true
+    clearInterval(interval)
+  }
+}, [address, isConnected])
+
 
   if (!hasMounted) {
     return <div className="min-h-screen bg-background" />
@@ -514,14 +459,14 @@ export default function ProfilePage() {
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Left Column: Personal Stats */}
           <DashboardPersonalStats
-            dcuBalance={profileData.dcuBalance}
-            cleanupsDone={profileData.level} // Using level as proxy for cleanups done
-            cleanupsDCU={profileData.level * 10} // 10 DCU per level
-            referrals={0} // TODO: Implement referral tracking
-            referralsDCU={0} // TODO: Implement referral tracking
+            dcuBalance={Number(profileData.dcuBalance)}
+            cleanupsDone={profileData.level}
+            cleanupsDCU={profileData.level * 10}
+            referrals={0}
+            referralsDCU={0}
             streakWeeks={profileData.streak}
-            streakDCU={profileData.streak * 3} // 3 DCU per week
-            enhancedReportsDCU={0} // TODO: Implement enhanced reports tracking
+            streakDCU={profileData.streak * 3}
+            enhancedReportsDCU={0}
             hasActiveStreak={profileData.hasActiveStreak}
           />
 
@@ -547,63 +492,22 @@ export default function ProfilePage() {
             } : null}
             onClaim={async () => {
               if (!cleanupStatus?.cleanupId || isClaiming) return
-
+            
               try {
                 setIsClaiming(true)
-                // Pass chainId to avoid false chain detection
-                const hash = await claimImpactProductFromVerification(cleanupStatus.cleanupId, chainId)
+            
+                await claimImpactProductFromVerification(cleanupStatus.cleanupId)
+
                 alert(
-                  `✅ Claim transaction submitted!\n\n` +
-                  `Transaction Hash: ${hash}\n\n` +
-                  `Your Impact Product will be minted once the transaction confirms.\n\n` +
-                  `View on ${BLOCK_EXPLORER_NAME}: ${getExplorerTxUrl(hash)}`
+                  `✅ Claim submitted!\n\n` +
+                  `Your claim transaction was sent.\n\n` +
+                  `Please wait for confirmation and refresh the page in a moment.`
                 )
-
-                // Wait for transaction confirmation
-                const { waitForTransactionReceipt } = await import('wagmi/actions')
-                const { config } = await import('@/lib/blockchain/wagmi')
-
-                try {
-                  await waitForTransactionReceipt(config, { hash, timeout: 60000 })
-                  console.log('✅ Claim transaction confirmed!')
-                } catch (waitError) {
-                  console.warn('Transaction confirmation wait failed, but continuing:', waitError)
+            
+                // Refresh local status + profile data
+                if (address) {
+                  await loadProfileData(address as Address, { showSpinner: false })
                 }
-
-                // Poll for status update
-                let pollCount = 0
-                const maxPolls = 10
-                const pollInterval = setInterval(async () => {
-                  pollCount++
-                  try {
-                    const status = await getCleanupStatus(cleanupStatus.cleanupId!)
-                    setCleanupStatus({
-                      cleanupId: cleanupStatus.cleanupId,
-                      verified: status.verified,
-                      claimed: status.claimed,
-                      level: status.level,
-                      loading: false,
-                    })
-
-                    if (status.claimed || pollCount >= maxPolls) {
-                      clearInterval(pollInterval)
-                      // Refresh profile data to show new level
-                      window.location.reload()
-                    }
-                  } catch (error) {
-                    console.error('Error polling status:', error)
-                    if (pollCount >= maxPolls) {
-                      clearInterval(pollInterval)
-                      window.location.reload()
-                    }
-                  }
-                }, 2000) // Poll every 2 seconds
-
-                // Fallback: reload after max time
-                setTimeout(() => {
-                  clearInterval(pollInterval)
-                  window.location.reload()
-                }, 20000) // Max 20 seconds
               } catch (error: any) {
                 console.error('Error claiming:', error)
                 const errorMessage = error?.message || String(error)
@@ -612,6 +516,7 @@ export default function ProfilePage() {
                 setIsClaiming(false)
               }
             }}
+            
             isClaiming={isClaiming}
           />
         </div>

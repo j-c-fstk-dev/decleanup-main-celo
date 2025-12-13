@@ -71,9 +71,9 @@ export default function VerifierPage() {
                 try {
                     const details = await getCleanupDetails(id)
                     submissions.push({
-                        id,
                         ...details
-                    })
+                      })
+                      
                 } catch (err) {
                     console.warn(`Failed to fetch cleanup ${id}`, err)
                 }

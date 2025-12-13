@@ -63,20 +63,44 @@ export default function Home() {
     setMintingHypercert(true)
     try {
       const hypercertNumber = Number(hypercertEligibility.hypercertCount) + 1
-      const result = await mintHypercert(address, hypercertNumber)
+      const handleMintHypercert = async () => {
+        if (!address || !hypercertEligibility?.isEligible) return
       
-      let message = `✅ Hypercert minted successfully!\n\n`
-      message += `Transaction: ${result.txHash}\n`
-      message += `Metadata IPFS: ${result.metadataHash}\n\n`
-      message += `View on Hypercerts: https://hypercerts.org/app/view/${result.txHash}`
+        setMintingHypercert(true)
       
-      if (result.rewardClaimed) {
-        message += `\n\n💰 You've earned 10 $cDCU for minting this hypercert!`
-      } else {
-        message += `\n\n💰 Your 10 $cDCU reward will be distributed shortly.`
+        try {
+          const hypercertNumber =
+            Number(hypercertEligibility.hypercertCount) + 1
+      
+          const result = await mintHypercert(address, hypercertNumber)
+      
+          const message =
+            `✅ Hypercert eligibility registered successfully!\n\n` +
+            `Transaction: ${result.txHash}\n` +
+            `Hypercert ID: ${result.hypercertId}\n` +
+            `Owner: ${result.owner}\n\n` +
+            `ℹ️ Hypercert metadata & claiming will be enabled in a future milestone.`
+      
+          alert(message)
+      
+          const newEligibility = await getHypercertEligibility(address)
+          setHypercertEligibility(newEligibility)
+        } catch (error) {
+          console.error('Error minting hypercert:', error)
+      
+          const errorMessage =
+            error instanceof Error ? error.message : 'Unknown error occurred'
+      
+          alert(
+            `❌ Failed to register hypercert eligibility:\n\n${errorMessage}`
+          )
+        } finally {
+          setMintingHypercert(false)
+        }
       }
       
-      alert(message)
+      
+      
       
       // Refresh eligibility
       const newEligibility = await getHypercertEligibility(address)

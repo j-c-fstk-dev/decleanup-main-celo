@@ -52,16 +52,18 @@ export async function getLeaderboardData(): Promise<LeaderboardUser[]> {
     for (let id = cleanupCount - BigInt(1); id >= startId && id >= BigInt(1); id--) {
       try {
         const details = await getCleanupDetails(id)
-        const user = details.submitter as Address
+        const user = details.user
         
         if (!userMap.has(user)) {
           // Get user's total DCU balance
           let totalDCU = 0
-          try {
-            totalDCU = await getDCUBalance(user)
-          } catch (error) {
-            console.warn(`Failed to get DCU balance for ${user}:`, error)
-          }
+        try {
+        const balance = await getDCUBalance(user)
+          totalDCU = Number(balance)
+        } catch (error) {
+          console.warn(`Failed to get DCU balance for ${user}:`, error)
+        }
+
 
           userMap.set(user, {
             totalDCU,

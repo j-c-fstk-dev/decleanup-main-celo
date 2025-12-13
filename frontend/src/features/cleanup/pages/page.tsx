@@ -8,11 +8,12 @@ import { Button } from '@/components/ui/button'
 import { FeeDisplay } from '@/components/ui/fee-display'
 import { BackButton } from '@/components/layout/BackButton'
 import { Camera, Upload, ArrowRight, Check, Loader2, ExternalLink, X, Clock, AlertCircle, Users } from 'lucide-react'
-import { uploadToIPFS, uploadJSONToIPFS, getIPFSUrl } from '@/lib/blockchain/ipfs'
-import { submitCleanup, getSubmissionFee, getCleanupStatus, CONTRACT_ADDRESSES, attachRecyclablesToSubmission } from '@/lib/blockchain/contracts'
+import { uploadToIPFS, uploadJSONToIPFS } from '@/lib/blockchain/ipfs'
+import { submitCleanup, getSubmissionFee } from '@/lib/blockchain/contracts'
+import { getCleanupDetails } from '@/lib/blockchain/contracts'
 import { clearPendingCleanupData, resetSubmissionCounting } from '@/lib/utils/cleanup-data'
 import type { Address } from 'viem'
-import { tryAddRequiredChain } from '@/lib/blockchain/network'
+import { CONTRACT_ADDRESSES } from '@/lib/blockchain/wagmi'
 import {
   REQUIRED_CHAIN_ID,
   REQUIRED_CHAIN_NAME,
@@ -249,7 +250,7 @@ function CleanupContent() {
 
           if (pendingCleanupId) {
             try {
-              const status = await getCleanupStatus(BigInt(pendingCleanupId))
+              const status = await getCleanupDetails(BigInt(pendingCleanupId))
               console.log('Cleanup status found:', status)
 
               // Verify this cleanup belongs to the current user
@@ -621,12 +622,12 @@ function CleanupContent() {
           afterHash.hash,
           location.lat,
           location.lng,
-          referrerAddress, // Use referrer from URL if available
+          referrerAddress,
           hasForm,
           impactFormDataHash || '',
-          feeValue, // Include fee if required
-          chainId // Pass chainId from useChainId hook to avoid detection bugs
+          feeValue
         )
+        
 
         console.log('✅ Cleanup submitted with ID:', cleanupId.toString())
         console.log('✅ Referrer address used in submission:', referrerAddress || 'none (no referrer)')
@@ -638,12 +639,21 @@ function CleanupContent() {
         if (hasRecyclables && recyclablesPhotoHash) {
           try {
             console.log('Attaching recyclables to submission...')
-            await attachRecyclablesToSubmission(
-              cleanupId,
-              recyclablesPhotoHash,
-              recyclablesReceiptHash || '',
-              chainId
-            )
+            // Attach recyclables if provided (separate function call - can be easily removed)
+if (hasRecyclables && recyclablesPhotoHash) {
+  try {
+    console.log('Attaching recyclables to submission...')
+    await attachRecyclablesToSubmission(
+      cleanupId,
+      recyclablesPhotoHash,
+      recyclablesReceiptHash || '',
+      chainId
+    )
+    console.log('✅ Recyclables attached successfully!')
+  } catch (recyclablesError: any) {
+    console.error('Error attaching recyclables (non-fatal):', recyclablesError)
+  }
+}
             console.log('✅ Recyclables attached successfully!')
           } catch (recyclablesError: any) {
             console.error('Error attaching recyclables (non-fatal):', recyclablesError)
@@ -962,7 +972,7 @@ function CleanupContent() {
         try {
           // First, check if cleanup actually exists onchain
           try {
-            const status = await getCleanupStatus(pendingCleanup.id)
+            const status = await getCleanupDetails(pendingCleanup.id)
             console.log('Cleanup status onchain:', status)
 
             // If cleanup exists and is verified, just clear localStorage
@@ -1886,3 +1896,7 @@ export default function CleanupPage() {
     </Suspense>
   )
 }
+function attachRecyclablesToSubmission(cleanupId: bigint, recyclablesPhotoHash: string, arg2: string, chainId: number) {
+  throw new Error('Function not implemented.')
+}
+

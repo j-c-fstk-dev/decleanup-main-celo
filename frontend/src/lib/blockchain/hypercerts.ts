@@ -1,44 +1,19 @@
-import { HypercertClient, TransferRestrictions } from '@hypercerts-org/sdk'
-import { createWalletClient, custom, type WalletClient } from 'viem'
-import { celo } from 'viem/chains'
+// ---------------------------------------------------------------------------
+// Hypercerts Read API – Simulated Placeholder (MVP)
+// Prevents build errors from UI imports.
+// ---------------------------------------------------------------------------
 
 /**
- * Get Hypercerts client instance
- * Requires wallet to be connected
- * 
- * Note: API key is OPTIONAL - only needed for advanced features (REST/GraphQL queries).
- * Basic minting works without an API key.
+ * Returns null metadata because Hypercerts are disabled for MVP.
  */
-export async function getHypercertsClient(): Promise<HypercertClient> {
-    if (typeof window === 'undefined' || !window.ethereum) {
-        throw new Error('Wallet not available. Please connect your wallet first.')
-    }
-
-    const walletClient = createWalletClient({
-        chain: celo,
-        transport: custom(window.ethereum),
-    }) as WalletClient
-
-    // Get environment (testnet or mainnet)
-    const network = process.env.NEXT_PUBLIC_HYPERCERTS_NETWORK || 'celo-sepolia'
-    const environment = network.includes('sepolia') || network.includes('testnet') ? 'test' : 'production'
-
-    // Initialize client - API key is optional (only needed for REST/GraphQL APIs)
-    const clientConfig: any = {
-        walletClient,
-        chainId: celo.id,
-        environment,
-    }
-
-    // Add API key only if provided (optional)
-    const apiKey = process.env.NEXT_PUBLIC_HYPERCERTS_API_KEY
-    if (apiKey) {
-        clientConfig.apiKey = apiKey
-    }
-
-    const client = new HypercertClient(clientConfig)
-
-    return client
+export async function fetchHypercertMetadata() {
+  console.warn("fetchHypercertMetadata() placeholder called — Hypercerts disabled.");
+  return null;
 }
 
-export { TransferRestrictions }
+/**
+ * Simulate read-only eligibility checks if UI calls for them.
+ */
+export async function getUserHypercerts(_user?: string) {
+  return [];
+}
