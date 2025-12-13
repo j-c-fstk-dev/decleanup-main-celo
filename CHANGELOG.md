@@ -171,4 +171,99 @@ All backend components are now **stable, consistent, and testnet-ready** pending
 
 
 
+## Frontend – MVP Stabilization & Build Fixes 2025/12/13
+
+This release focuses on stabilizing the frontend for the MVP, unblocking the build, and aligning the UI logic with the current on-chain and stubbed contract state. Over multiple days of work, several inconsistencies, legacy assumptions, and partially implemented features were cleaned up or intentionally scoped down.
+
+### General Overview
+
+- The frontend now builds successfully with strict TypeScript checks enabled.
+- All contract interactions were aligned with the current MVP contract surface (stubs where needed).
+- Several features that were partially implemented or assumed future contracts (NFTs, Hypercerts, advanced referrals) were explicitly scoped out or gated to avoid broken flows.
+- Verification, profile, leaderboard, and cleanup submission flows were simplified and made consistent.
+
+---
+
+### Blockchain / Contracts Layer (Frontend)
+
+- Removed the assumption of a single `contracts.ts` index export.
+- Standardized imports to use individual files under `lib/blockchain/`.
+- Introduced explicit **MVP stubs** for:
+  - Cleanup submission
+  - Verification (approve / reject)
+  - Claiming rewards
+  - Impact Product / NFT-related calls
+- Ensured all stubbed functions return predictable values (`void`, `0n`, `false`, etc.) to avoid runtime and type errors.
+- Removed unused or non-existent exports such as `CONTRACT_ADDRESSES` from places where they were incorrectly referenced.
+- Aligned `getCleanupDetails` return shape across verifier, leaderboard, and profile usage.
+
+---
+
+### Verification Flow
+
+- Simplified the verification logic to rely on:
+  - `getCleanupDetails(cleanupId)`
+  - LocalStorage tracking for pending cleanups
+- Removed duplicated or conflicting cleanup status helpers.
+- Fixed redeclared imports and duplicated symbols in verifier pages.
+- Explicitly scoped verification to **one active cleanup per user** for the MVP.
+- Removed assumptions about historical scanning or multi-cleanup claims.
+
+---
+
+### Profile Page
+
+- Fixed multiple type mismatches (`bigint` vs `number`) by clearly separating:
+  - On-chain values (`bigint`)
+  - UI values (`number`)
+- Made `tokenId` optional and nullable to support MVP without Impact Product NFTs.
+- Ensured metadata, images, and animations gracefully fallback when data is missing.
+- Cleaned up staking, streak, and level logic to reflect stubbed contract behavior.
+- Profile page now renders safely even when all blockchain calls are stubs.
+
+---
+
+### Leaderboard
+
+- Fixed incorrect assumptions about cleanup ownership fields (`submitter` → `user`).
+- Normalized DCU balance handling (`bigint` → `number`) for sorting and UI.
+- Limited leaderboard scanning to a safe recent range to avoid excessive calls.
+- Made geolocation enrichment optional and failure-tolerant.
+- Leaderboard now works fully with MVP stubs and real contracts.
+
+---
+
+### Cleanup Utilities & Debug Tools
+
+- Fixed `find-cleanup.ts` by removing dependency on non-existent exports.
+- Scoped debug helpers to explicitly configured contract addresses.
+- Improved error handling and logging for missing or reverted cleanups.
+
+---
+
+### Hypercert / Image Generation (MVP Scope)
+
+- Identified that `CleanupData` was not exported by `hypercerts-metadata`.
+- Avoided breaking builds by aligning imports and expectations.
+- Clarified that Hypercert image generation remains **experimental and MVP-disabled**.
+- Ensured IPFS upload helpers receive proper `File` objects instead of raw `Blob`s.
+
+---
+
+### General Cleanup & Type Safety
+
+- Removed duplicated imports and redeclared variables.
+- Fixed multiple `void` vs `hash` mismatches in transaction flows.
+- Aligned all async blockchain calls with their actual return types.
+- Ensured all pages compile under strict TypeScript rules.
+
+---
+
+### Result
+
+- Frontend builds cleanly with no TypeScript or lint errors.
+- MVP scope is clearly enforced in code (no “half-enabled” features).
+- UI flows (cleanup → verification → profile → leaderboard) are consistent and predictable.
+- The project is now ready for deployment and further iteration without hidden blockers.
+
 
