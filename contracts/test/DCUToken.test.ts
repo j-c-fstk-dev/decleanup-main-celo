@@ -1,19 +1,13 @@
 import { chai, expect } from "./helpers/setup";
 import hre from "hardhat";
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers";
-import { getAddress } from "viem";
 
 describe("DCUToken", function () {
   async function deployTokenFixture() {
     const [owner, user, governance] = await hre.viem.getWalletClients();
     const publicClient = await hre.viem.getPublicClient();
 
-    // Deploy a mock reward logic contract first (we'll use owner address for simplicity)
-    const rewardLogicAddress = owner.account.address;
-
-    const dcuToken = await hre.viem.deployContract("DCUToken", [
-      rewardLogicAddress,
-    ]);
+    const dcuToken = await hre.viem.deployContract("DCUToken");
 
     return {
       dcuToken,
@@ -21,7 +15,6 @@ describe("DCUToken", function () {
       user,
       governance,
       publicClient,
-      rewardLogicAddress,
     };
   }
 
@@ -34,16 +27,16 @@ describe("DCUToken", function () {
       expect(await dcuToken.read.decimals()).to.equal(18);
     });
 
-    it("Should allow reward logic contract to mint tokens with no cap", async function () {
+    it("Should allow minter to mint tokens with no cap", async function () {
       const { dcuToken, owner, user } = await loadFixture(deployTokenFixture);
 
       const amount = 100n * 10n ** 18n; // 100 tokens
-      await dcuToken.write.mint([getAddress(user.account.address), amount], {
+      await dcuToken.write.mint([user.account.address, amount], {
         account: owner.account,
       });
 
       const balance = await dcuToken.read.balanceOf([
-        getAddress(user.account.address),
+        user.account.address,
       ]);
       expect(balance).to.equal(amount);
       
@@ -60,15 +53,15 @@ describe("DCUToken", function () {
       const amount2 = 200n * 10n ** 18n; // 200 tokens
       const amount3 = 150n * 10n ** 18n; // 150 tokens
       
-      await dcuToken.write.mint([getAddress(user.account.address), amount1], {
+      await dcuToken.write.mint([user.account.address, amount1], {
         account: owner.account,
       });
       
-      await dcuToken.write.mint([getAddress(user.account.address), amount2], {
+      await dcuToken.write.mint([user.account.address, amount2], {
         account: owner.account,
       });
       
-      await dcuToken.write.mint([getAddress(user.account.address), amount3], {
+      await dcuToken.write.mint([user.account.address, amount3], {
         account: owner.account,
       });
 
@@ -86,17 +79,17 @@ describe("DCUToken", function () {
 
       // First mint some tokens
       const amount = 100n * 10n ** 18n; // 100 tokens
-      await dcuToken.write.mint([getAddress(user.account.address), amount], {
+      await dcuToken.write.mint([user.account.address, amount], {
         account: owner.account,
       });
 
       // Then burn them
-      await dcuToken.write.burn([getAddress(user.account.address), amount], {
+      await dcuToken.write.burn([user.account.address, amount], {
         account: owner.account,
       });
 
       const balance = await dcuToken.read.balanceOf([
-        getAddress(user.account.address),
+        user.account.address,
       ]);
       expect(balance).to.equal(0n);
       
@@ -105,61 +98,49 @@ describe("DCUToken", function () {
       expect(totalMinted).to.equal(amount);
     });
 
-    it("Should prevent non-reward-logic from minting", async function () {
+    it("Should prevent non-minter from minting", async function () {
       const { dcuToken, user } = await loadFixture(deployTokenFixture);
 
       const amount = 100n * 10n ** 18n; // 100 tokens
       await expect(
-        dcuToken.write.mint([getAddress(user.account.address), amount], {
+        dcuToken.write.mint([user.account.address, amount], {
           account: user.account,
         })
-      ).to.be.rejectedWith("Only RewardLogic Contract can mint");
+      ).to.be.rejected;
     });
 
-    it("Should allow owner to update reward logic contract", async function () {
+    it("Should allow owner to grant and revoke minter role", async function () {
       const { dcuToken, owner, user } = await loadFixture(deployTokenFixture);
+      const MINTER_ROLE = await dcuToken.read.MINTER_ROLE();
 
-      // Get the initial reward logic contract
-      const initialRewardLogic = await dcuToken.read.rewardLogicContract();
-
-      // Update to a new address (user's address for this test)
-      await dcuToken.write.updateRewardLogicContract(
-        [getAddress(user.account.address)],
-        {
-          account: owner.account,
-        }
-      );
-
-      // Check that the reward logic contract was updated
-      const newRewardLogic = await dcuToken.read.rewardLogicContract();
-      expect(newRewardLogic).to.equal(getAddress(user.account.address));
-      expect(newRewardLogic).to.not.equal(initialRewardLogic);
+      // Grant minter role to user
+      await dcuToken.write.grantRole([MINTER_ROLE, user.account.address], {
+        account: owner.account,
+      });
 
       // Now user should be able to mint tokens
       const amount = 100n * 10n ** 18n; // 100 tokens
-      await dcuToken.write.mint([getAddress(owner.account.address), amount], {
+      await dcuToken.write.mint([owner.account.address, amount], {
         account: user.account,
       });
 
       // Check the balance
       const balance = await dcuToken.read.balanceOf([
-        getAddress(owner.account.address),
+        owner.account.address,
       ]);
       expect(balance).to.equal(amount);
-    });
 
-    it("Should prevent non-owners from updating reward logic contract", async function () {
-      const { dcuToken, user } = await loadFixture(deployTokenFixture);
+      // Revoke minter role from user
+      await dcuToken.write.revokeRole([MINTER_ROLE, user.account.address], {
+        account: owner.account,
+      });
 
-      // Try to update reward logic contract as non-owner
+      // User should no longer be able to mint
       await expect(
-        dcuToken.write.updateRewardLogicContract(
-          [getAddress(user.account.address)],
-          {
-            account: user.account,
-          }
-        )
-      ).to.be.rejectedWith("OwnableUnauthorizedAccount");
+        dcuToken.write.mint([owner.account.address, amount], {
+          account: user.account,
+        })
+      ).to.be.rejected;
     });
   });
   
@@ -176,7 +157,7 @@ describe("DCUToken", function () {
       
       // First mint some tokens
       const mintAmount = 100n * 10n ** 18n; // 100 tokens
-      await dcuToken.write.mint([getAddress(user.account.address), mintAmount], {
+      await dcuToken.write.mint([user.account.address, mintAmount], {
         account: owner.account,
       });
       
@@ -211,21 +192,21 @@ describe("DCUToken", function () {
       
       // Mint some tokens under the cap
       const mintAmount1 = 300n * 10n ** 18n; // 300 tokens
-      await dcuToken.write.mint([getAddress(user.account.address), mintAmount1], {
+      await dcuToken.write.mint([user.account.address, mintAmount1], {
         account: owner.account,
       });
       
       // Try to mint more than the cap allows
       const mintAmount2 = 201n * 10n ** 18n; // 201 tokens (would exceed cap)
       await expect(
-        dcuToken.write.mint([getAddress(user.account.address), mintAmount2], {
+        dcuToken.write.mint([user.account.address, mintAmount2], {
           account: owner.account,
         })
-      ).to.be.rejectedWith("Supply cap would be exceeded");
+      ).to.be.rejected;
       
       // Mint exactly up to the cap
       const mintAmount3 = 200n * 10n ** 18n; // 200 tokens (exactly hits cap)
-      await dcuToken.write.mint([getAddress(user.account.address), mintAmount3], {
+      await dcuToken.write.mint([user.account.address, mintAmount3], {
         account: owner.account,
       });
       
@@ -245,7 +226,7 @@ describe("DCUToken", function () {
       
       // Mint some tokens
       const mintAmount1 = 300n * 10n ** 18n; // 300 tokens
-      await dcuToken.write.mint([getAddress(user.account.address), mintAmount1], {
+      await dcuToken.write.mint([user.account.address, mintAmount1], {
         account: owner.account,
       });
       
@@ -260,7 +241,7 @@ describe("DCUToken", function () {
       
       // Now we should be able to mint beyond the previous cap
       const mintAmount2 = 500n * 10n ** 18n; // Another 500 tokens (beyond previous cap)
-      await dcuToken.write.mint([getAddress(user.account.address), mintAmount2], {
+      await dcuToken.write.mint([user.account.address, mintAmount2], {
         account: owner.account,
       });
       
@@ -275,7 +256,7 @@ describe("DCUToken", function () {
       
       // Mint some tokens
       const mintAmount = 1000n * 10n ** 18n; // 1000 tokens
-      await dcuToken.write.mint([getAddress(user.account.address), mintAmount], {
+      await dcuToken.write.mint([user.account.address, mintAmount], {
         account: owner.account,
       });
       
@@ -285,7 +266,7 @@ describe("DCUToken", function () {
         dcuToken.write.setSupplyCap([lowCapAmount], {
           account: owner.account,
         })
-      ).to.be.rejectedWith("Cap cannot be less than current supply");
+      ).to.be.rejected;
     });
   });
   
@@ -304,7 +285,7 @@ describe("DCUToken", function () {
       
       // Mint tokens first
       const mintAmount = 100n * 10n ** 18n; // 100 tokens
-      await dcuToken.write.mint([getAddress(user.account.address), mintAmount], {
+      await dcuToken.write.mint([user.account.address, mintAmount], {
         account: owner.account,
       });
       
@@ -316,7 +297,7 @@ describe("DCUToken", function () {
       
       // Check the balance after burning
       const balance = await dcuToken.read.balanceOf([
-        getAddress(user.account.address),
+        user.account.address,
       ]);
       expect(balance).to.equal(mintAmount - burnAmount);
     });

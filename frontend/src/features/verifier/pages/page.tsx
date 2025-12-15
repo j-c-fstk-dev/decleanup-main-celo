@@ -7,15 +7,15 @@ import { Button } from '@/components/ui/button'
 import { BackButton } from '@/components/layout/BackButton'
 import { CheckCircle, XCircle, Clock, MapPin, User, Calendar, ExternalLink, Loader2, Shield, RefreshCw } from 'lucide-react'
 import * as contractsLib from '@/lib/blockchain/contracts'
+
 const {
   getCleanupCounter,
   getCleanupDetails,
   verifyCleanup,
   rejectCleanup,
-  getCleanupStatus,
   getUserLevel,
-  CONTRACT_ADDRESSES,
 } = contractsLib
+
 import { Address } from 'viem'
 import { waitForTransactionReceipt } from 'wagmi/actions'
 import { config, REQUIRED_BLOCK_EXPLORER_URL, REQUIRED_CHAIN_NAME, REQUIRED_CHAIN_ID } from '@/lib/blockchain/wagmi'
@@ -169,13 +169,7 @@ export default function VerifierPage() {
 
   async function verifyAgainstContract(addr: Address) {
     try {
-      const contractAddress = CONTRACT_ADDRESSES.VERIFICATION
-      if (!contractAddress) {
-        setError('Verification contract address not configured. Please set NEXT_PUBLIC_VERIFICATION_CONTRACT in .env.local')
-        setLoading(false)
-        return
-      }
-
+            
       // Get isVerifier from the contracts library
       const isVerifierFn = contractsLib.isVerifier
       
@@ -376,10 +370,15 @@ export default function VerifierPage() {
           })
           
           cleanupList.push({
-            id: BigInt(i),
             ...details,
+            id: BigInt(i),
             rejected: details.rejected || false,
+            referrer: '0x0000000000000000000000000000000000000000',
+            hasImpactForm: false,
+            impactReportHash: '',
           })
+         
+          
         } catch (error: any) {
           // If cleanup doesn't exist (e.g., deleted or never created), skip it
           // This can happen if counter is higher than actual cleanups
@@ -443,7 +442,7 @@ export default function VerifierPage() {
       }
 
       // Verify with automatically calculated level - pass chainId to avoid false detection
-      const hash = await verifyCleanup(cleanupId, nextLevel, chainId)
+      const hash = await verifyCleanup(cleanupId, nextLevel)
       setActiveTx({ cleanupId, hash })
       console.log(`Verifying cleanup ${cleanupId.toString()} with level ${nextLevel}`)
       console.log(`Transaction hash: ${hash}`)
@@ -473,7 +472,7 @@ export default function VerifierPage() {
         setPollingStatus({ cleanupId, count: pollCount })
         console.log(`Polling for verification status (attempt ${pollCount}/${maxPolls})...`)
         try {
-          const status = await getCleanupStatus(cleanupId)
+          const status = await getCleanupDetails(cleanupId)
           console.log(`Cleanup ${cleanupId.toString()} status check:`, { verified: status.verified, level: status.level })
           if (status.verified) {
             console.log('✅ Cleanup verified confirmed onchain, reloading cleanups...')
@@ -562,7 +561,7 @@ export default function VerifierPage() {
 
     try {
       // Pass chainId to avoid false chain detection
-      const hash = await rejectCleanup(cleanupId, chainId)
+      const hash = await rejectCleanup(cleanupId)
       console.log(`Rejecting cleanup ${cleanupId.toString()}`)
       console.log(`Transaction hash: ${hash}`)
       
@@ -631,8 +630,12 @@ export default function VerifierPage() {
         }
         try {
           setLoading(true)
-          const { getIPFSUrl, getIPFSFallbackUrls } = await import('@/lib/ipfs')
-          const urls = [getIPFSUrl(impactReportHash), ...getIPFSFallbackUrls(impactReportHash)]
+          const primaryUrl = getIPFSUrl(impactReportHash)
+          if (!primaryUrl) {
+            throw new Error('Failed to generate IPFS URL for impact report')
+            }
+          const urls = [primaryUrl, ...getIPFSFallbackUrls(impactReportHash)]
+
           if (!urls[0]) {
             throw new Error('Failed to generate IPFS URL for impact report')
           }
@@ -922,8 +925,7 @@ export default function VerifierPage() {
   }
 
   if (!isVerifier) {
-    const contractAddress = CONTRACT_ADDRESSES.VERIFICATION
-    return (
+        return (
       <div className="min-h-screen bg-background px-4 py-8 pb-20">
         <div className="mx-auto max-w-4xl">
           <BackButton href="/" />
@@ -942,16 +944,6 @@ export default function VerifierPage() {
               <p className="text-sm text-gray-500 font-mono break-all">
                 <span className="text-gray-400">Your address:</span> {address}
               </p>
-              {contractAddress && (
-                <p className="text-sm text-gray-500 font-mono break-all">
-                  <span className="text-gray-400">Contract address:</span> {contractAddress}
-                </p>
-              )}
-              {!contractAddress && (
-                <p className="text-sm text-red-400">
-                  ⚠ Contract address not configured. Set NEXT_PUBLIC_VERIFICATION_CONTRACT in .env.local
-                </p>
-              )}
             </div>
             <div className="rounded-lg border border-gray-700 bg-gray-900 p-4 text-left">
               <p className="mb-2 text-sm font-semibold text-white">Troubleshooting:</p>

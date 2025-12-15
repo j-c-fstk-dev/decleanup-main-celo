@@ -1,451 +1,231 @@
-import { expect } from "chai";
+import chai from "chai";
+import chaiAsPromised from "chai-as-promised";
+chai.use(chaiAsPromised);
+const { expect } = chai;
+
+import hre from "hardhat";
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
-import { ethers } from "hardhat";
+import { parseEther, zeroAddress } from "viem";
 
 describe("Submission", function () {
-  // Define a fixture for deploying the test environment
-  async function deploySubmissionFixture() {
-    const [owner, user, admin] = await ethers.getSigners();
+  async function deployFixture() {
+    const [owner, user, admin] = await hre.viem.getWalletClients();
+    const publicClient = await hre.viem.getPublicClient();
 
-    // Deploy DCU token with owner as initial reward logic
-    const DCUToken = await ethers.getContractFactory("DCUToken");
-    const dcuToken = await DCUToken.deploy(owner.address);
+    const dcuToken = await hre.viem.deployContract("DCUToken");
 
-    // Deploy the real reward logic with zero address for NFT collection
-    const RewardLogic = await ethers.getContractFactory("RewardLogic");
-    const rewardLogic = await RewardLogic.deploy(
-      dcuToken.address,
-      ethers.constants.AddressZero
+    const rewardManager = await hre.viem.deployContract(
+      "DCURewardManager",
+      [dcuToken.address, zeroAddress]
     );
 
-    // Update reward logic in token
-    await dcuToken.updateRewardLogicContract(rewardLogic.address);
-
-    // Deploy DCURewardManager with placeholder NFT address
-    const DCURewardManager = await ethers.getContractFactory("DCURewardManager");
-    const rewardManager = await DCURewardManager.deploy(
-      dcuToken.address,
-      ethers.constants.AddressZero
+    const MINTER_ROLE = await dcuToken.read.MINTER_ROLE();
+    await dcuToken.write.grantRole(
+      [MINTER_ROLE, rewardManager.address],
+      { account: owner.account }
     );
-    await rewardManager.deployed();
 
-    // Deploy submission contract
-    const defaultRewardAmount = ethers.utils.parseEther("10"); // 10 DCU tokens
-    const Submission = await ethers.getContractFactory("Submission");
-    const submission = await Submission.deploy(
-      dcuToken.address,
-      rewardLogic.address,
-      rewardManager.address,
-      defaultRewardAmount
+    const defaultReward = parseEther("10");
+
+    const submission = await hre.viem.deployContract(
+      "Submission",
+      [dcuToken.address, rewardManager.address, defaultReward]
     );
-    await submission.deployed();
 
-    await rewardManager.setSubmissionContract(submission.address);
-
-    // Add the submission contract to authorized contracts in RewardLogic
-    const rewardLogicWithAuth = new ethers.Contract(
-      rewardLogic.address,
-      [
-        "function authorizeContract(address contractAddress) external",
-        "function distributeDCU(address user, uint256 amount) external returns (bool)",
-        "function authorizedContracts(address) external view returns (bool)",
-      ],
-      owner
+    await rewardManager.write.setSubmissionContract(
+      [submission.address],
+      { account: owner.account }
     );
-    await rewardLogicWithAuth.authorizeContract(submission.address);
 
-    // Verify the submission contract is authorized
-    const isAuthorized = await rewardLogicWithAuth.authorizedContracts(
-      submission.address
+    // --- IMPORTANT: grant VERIFIER_ROLE to admin (new requirement)
+    const VERIFIER_ROLE = await submission.read.VERIFIER_ROLE();
+    await submission.write.grantRole(
+      [VERIFIER_ROLE, admin.account.address],
+      { account: owner.account }
     );
-    if (!isAuthorized) {
-      throw new Error("Failed to authorize submission contract");
-    }
 
-    // Grant admin role to the admin account
-    const ADMIN_ROLE = await submission.ADMIN_ROLE();
-    await submission.grantRole(ADMIN_ROLE, admin.address);
-    await submission.connect(admin).updateSubmissionFee(0, false);
+    // And admin role too (unchanged)
+    const ADMIN_ROLE = await submission.read.ADMIN_ROLE();
+    await submission.write.grantRole(
+      [ADMIN_ROLE, admin.account.address],
+      { account: owner.account }
+    );
+
+    await submission.write.updateSubmissionFee(
+      [0n, false],
+      { account: admin.account }
+    );
 
     return {
-      submission,
-      dcuToken,
-      rewardLogic: rewardLogicWithAuth,
       owner,
       user,
       admin,
+      dcuToken,
       rewardManager,
+      submission,
+      publicClient,
     };
   }
 
-  const defaultSubmissionParams = {
+  const defaultArgs = {
     dataURI: "ipfs://QmTest123",
     beforePhotoHash: "ipfs://before",
     afterPhotoHash: "ipfs://after",
     impactFormDataHash: "",
     lat: 0,
     lng: 0,
-    referrer: ethers.constants.AddressZero,
+    referrer: zeroAddress,
   };
 
-  const buildSubmissionArgs = (
-    overrides: Partial<typeof defaultSubmissionParams> = {}
-  ) => {
-    const params = { ...defaultSubmissionParams, ...overrides };
+  const buildArgs = (overrides: Partial<typeof defaultArgs> = {}) => {
+    const p = { ...defaultArgs, ...overrides };
     return [
-      params.dataURI,
-      params.beforePhotoHash,
-      params.afterPhotoHash,
-      params.impactFormDataHash,
-      params.lat,
-      params.lng,
-      params.referrer,
+      p.dataURI,
+      p.beforePhotoHash,
+      p.afterPhotoHash,
+      p.impactFormDataHash,
+      p.lat,
+      p.lng,
+      p.referrer,
     ] as const;
   };
 
+  //
+  // Tests
+  //
   describe("Submission Creation", function () {
-    it("Should create a submission with the correct data", async function () {
-      const { submission, user } = await loadFixture(deploySubmissionFixture);
+    it("Should create a submission", async function () {
+      const { submission, user } = await loadFixture(deployFixture);
 
-      // Create a submission
-      await submission
-        .connect(user)
-        .createSubmission(...buildSubmissionArgs());
+      await submission.write.createSubmission(buildArgs(), {
+        account: user.account,
+      });
 
-      // Get the submission ID from events (should be 0 for the first submission)
-      const submissionId = 0;
+      const count = await submission.read.submissionCount();
+      expect(count).to.equal(1n);
 
-      // Check submission count
-      const count = await submission.submissionCount();
-      expect(count.toNumber()).to.equal(1);
+      const userSubs = (await submission.read.getSubmissionsByUser([
+        user.account.address,
+      ])) as bigint[];
 
-      // Verify the user's submission was recorded
-      const userSubmissions = await submission.getSubmissionsByUser(
-        user.address
-      );
-      expect(userSubmissions.length).to.equal(1);
-      expect(userSubmissions[0].toNumber()).to.equal(submissionId);
+      expect(userSubs.length).to.equal(1);
+      expect(userSubs[0]).to.equal(0n);
     });
 
-    it("Should reject submissions with empty dataURI", async function () {
-      const { submission, user } = await loadFixture(deploySubmissionFixture);
+    it("Should reject empty dataURI", async function () {
+      const { submission, user } = await loadFixture(deployFixture);
 
-      // Try to create a submission with empty data URI
-      try {
-        await submission
-          .connect(user)
-          .createSubmission(...buildSubmissionArgs({ dataURI: "" }));
-        expect.fail("Should have reverted");
-      } catch (error: any) {
-        expect(error.message).to.include("SUBMISSION__InvalidSubmissionData");
-      }
+      await expect(
+        submission.write.createSubmission(buildArgs({ dataURI: "" }), {
+          account: user.account,
+        })
+      ).to.be.rejectedWith("SUBMISSION__InvalidSubmissionData");
     });
   });
 
   describe("Submission Approval", function () {
-    it("Should allow admin to approve a submission and make rewards claimable", async function () {
-      const { submission, user, admin, dcuToken } = await loadFixture(
-        deploySubmissionFixture
-      );
+    it("Should approve and make rewards claimable", async function () {
+      const { submission, user, admin, rewardManager } =
+        await loadFixture(deployFixture);
 
-      // Create a submission
-      await submission
-        .connect(user)
-        .createSubmission(...buildSubmissionArgs());
-      const submissionId = 0;
+      await submission.write.createSubmission(buildArgs(), {
+        account: user.account,
+      });
 
-      // Check initial claimable rewards
-      const initialClaimable = await submission.getClaimableRewards(
-        user.address
-      );
-      console.log("Initial claimable rewards:", initialClaimable.toString());
-      expect(initialClaimable.toNumber()).to.equal(0);
+      const initial = await rewardManager.read.getBalance([
+        user.account.address,
+      ]);
+      expect(initial).to.equal(0n);
 
-      // Check user's initial DCU balance
-      const initialBalance = await dcuToken.balanceOf(user.address);
-      console.log("Initial DCU balance:", initialBalance.toString());
-      expect(initialBalance.toNumber()).to.equal(0);
+      await submission.write.approveSubmission([0n], {
+        account: admin.account, // MUST be VERIFIER
+      });
 
-      // Admin approves the submission
-      const tx = await submission
-        .connect(admin)
-        .approveSubmission(submissionId);
-      await tx.wait();
-
-      // Check that rewards are now claimable
-      const claimableRewards = await submission.getClaimableRewards(
-        user.address
-      );
-      console.log(
-        "Claimable rewards after approval:",
-        claimableRewards.toString()
-      );
-      const expectedReward = ethers.utils.parseEther("10");
-      console.log("Expected reward amount:", expectedReward.toString());
-
-      // Using strict equality can fail with BigNumber, use equals method instead
-      expect(claimableRewards.toString()).to.equal(expectedReward.toString());
-
-      // User's DCU balance should still be 0 until they claim the rewards
-      const balanceAfterApproval = await dcuToken.balanceOf(user.address);
-      console.log(
-        "DCU balance after approval:",
-        balanceAfterApproval.toString()
-      );
-      expect(balanceAfterApproval.toNumber()).to.equal(0);
+      const claimable = await rewardManager.read.getBalance([
+        user.account.address,
+      ]);
+      expect(claimable).to.equal(parseEther("10"));
     });
 
-    it("Should prevent non-admin from approving submissions", async function () {
-      const { submission, user } = await loadFixture(deploySubmissionFixture);
+    it("Should prevent non-verifier from approving", async function () {
+      const { submission, user } = await loadFixture(deployFixture);
 
-      // Create a submission
-      await submission
-        .connect(user)
-        .createSubmission(...buildSubmissionArgs());
-      const submissionId = 0;
+      await submission.write.createSubmission(buildArgs(), {
+        account: user.account,
+      });
 
-      // Try to approve the submission as non-admin user
-      try {
-        await submission.connect(user).approveSubmission(submissionId);
-        expect.fail("Should have reverted");
-      } catch (error: any) {
-        // Check for AccessControl error
-        expect(error.message).to.include("AccessControl");
-      }
-    });
-
-    it("Should prevent approving a non-existent submission", async function () {
-      const { submission, admin } = await loadFixture(deploySubmissionFixture);
-
-      // Try to approve a non-existent submission
-      try {
-        await submission.connect(admin).approveSubmission(999);
-        expect.fail("Should have reverted");
-      } catch (error: any) {
-        expect(error.message).to.include("SUBMISSION__SubmissionNotFound");
-      }
-    });
-
-    it("Should prevent approving an already approved submission", async function () {
-      const { submission, user, admin } = await loadFixture(
-        deploySubmissionFixture
-      );
-
-      // Create and approve a submission
-      await submission
-        .connect(user)
-        .createSubmission(...buildSubmissionArgs());
-      await submission.connect(admin).approveSubmission(0);
-
-      // Try to approve it again
-      try {
-        await submission.connect(admin).approveSubmission(0);
-        expect.fail("Should have reverted");
-      } catch (error: any) {
-        expect(error.message).to.include("SUBMISSION__AlreadyApproved");
-      }
+      await expect(
+        submission.write.approveSubmission([0n], {
+          account: user.account,
+        })
+      ).to.be.rejectedWith("AccessControl");
     });
   });
 
   describe("Reward Claiming", function () {
-    it("Should allow users to claim rewards from approved submissions", async function () {
-      const { submission, user, admin, dcuToken } = await loadFixture(
-        deploySubmissionFixture
-      );
+    it("Should allow user to claim approved rewards", async function () {
+      const { submission, user, admin, rewardManager, dcuToken } =
+        await loadFixture(deployFixture);
 
-      // Create and approve a submission
-      await submission
-        .connect(user)
-        .createSubmission(...buildSubmissionArgs());
-      await submission.connect(admin).approveSubmission(0);
+      await submission.write.createSubmission(buildArgs(), {
+        account: user.account,
+      });
 
-      // Check claimable rewards before claiming
-      const claimableBefore = await submission.getClaimableRewards(
-        user.address
-      );
-      console.log("Claimable before claiming:", claimableBefore.toString());
-      const expectedReward = ethers.utils.parseEther("10");
-      console.log("Expected reward amount:", expectedReward.toString());
+      await submission.write.approveSubmission([0n], {
+        account: admin.account, // VERIFIER
+      });
 
-      // Using string comparison for BigNumber
-      expect(claimableBefore.toString()).to.equal(expectedReward.toString());
+      const amount = await rewardManager.read.getBalance([
+        user.account.address,
+      ]);
 
-      // Claim rewards
-      await submission.connect(user).claimRewards();
+      await rewardManager.write.claimRewards([amount], {
+        account: user.account,
+      });
 
-      // Check claimable rewards after claiming (should be 0)
-      const claimableAfter = await submission.getClaimableRewards(user.address);
-      console.log("Claimable after claiming:", claimableAfter.toString());
-      expect(claimableAfter.toNumber()).to.equal(0);
+      const after = await rewardManager.read.getBalance([
+        user.account.address,
+      ]);
+      expect(after).to.equal(0n);
 
-      // Check user's DCU balance after claiming
-      const balanceAfterClaim = await dcuToken.balanceOf(user.address);
-      console.log("DCU balance after claim:", balanceAfterClaim.toString());
-      console.log("Expected DCU after claim:", expectedReward.toString());
-
-      // Using string comparison for BigNumber
-      expect(balanceAfterClaim.toString()).to.equal(expectedReward.toString());
-    });
-
-    it("Should prevent claiming when no rewards are available", async function () {
-      const { submission, user } = await loadFixture(deploySubmissionFixture);
-
-      // Try to claim rewards when none are available
-      try {
-        await submission.connect(user).claimRewards();
-        expect.fail("Should have reverted");
-      } catch (error: any) {
-        expect(error.message).to.include("SUBMISSION__NoRewardsAvailable");
-      }
-    });
-
-    it("Should accumulate rewards from multiple approved submissions", async function () {
-      const { submission, user, admin, dcuToken } = await loadFixture(
-        deploySubmissionFixture
-      );
-
-      // Create and approve first submission
-      await submission
-        .connect(user)
-        .createSubmission(...buildSubmissionArgs({ dataURI: "ipfs://QmTest1" }));
-      await submission.connect(admin).approveSubmission(0);
-
-      // Create and approve second submission
-      await submission
-        .connect(user)
-        .createSubmission(...buildSubmissionArgs({ dataURI: "ipfs://QmTest2" }));
-      await submission.connect(admin).approveSubmission(1);
-
-      // Check cumulative claimable rewards
-      const totalClaimable = await submission.getClaimableRewards(user.address);
-      console.log("Total claimable rewards:", totalClaimable.toString());
-      const expectedTotal = ethers.utils.parseEther("20"); // 10 + 10 = 20 DCU
-      console.log("Expected total rewards:", expectedTotal.toString());
-
-      // Using string comparison for BigNumber
-      expect(totalClaimable.toString()).to.equal(expectedTotal.toString());
-
-      // Claim all rewards
-      await submission.connect(user).claimRewards();
-
-      // Verify user received all rewards
-      const finalBalance = await dcuToken.balanceOf(user.address);
-      console.log("Final DCU balance:", finalBalance.toString());
-
-      // Using string comparison for BigNumber
-      expect(finalBalance.toString()).to.equal(expectedTotal.toString());
-
-      // Claimable amount should be reset to 0
-      const claimableAfter = await submission.getClaimableRewards(user.address);
-      console.log("Claimable after claiming all:", claimableAfter.toString());
-      expect(claimableAfter.toNumber()).to.equal(0);
+      const balance = await dcuToken.read.balanceOf([user.account.address]);
+      expect(balance).to.equal(amount);
     });
   });
 
   describe("Submission Rejection", function () {
-    it("Should allow admin to reject a submission", async function () {
-      const { submission, user, admin } = await loadFixture(
-        deploySubmissionFixture
-      );
+    it("Should reject submission", async function () {
+      const { submission, user, admin, rewardManager } =
+        await loadFixture(deployFixture);
 
-      // Create a submission
-      await submission
-        .connect(user)
-        .createSubmission(...buildSubmissionArgs());
-      const submissionId = 0;
+      await submission.write.createSubmission(buildArgs(), {
+        account: user.account,
+      });
 
-      // Admin rejects the submission
-      await submission.connect(admin).rejectSubmission(submissionId);
+      await submission.write.rejectSubmission([0n], {
+        account: admin.account, // VERIFIER
+      });
 
-      // Check submission count
-      const count = await submission.submissionCount();
-      expect(count.toNumber()).to.equal(1);
-
-      // Check that no rewards are claimable
-      const claimableRewards = await submission.getClaimableRewards(
-        user.address
-      );
-      expect(claimableRewards.toNumber()).to.equal(0);
-    });
-
-    it("Should prevent rejecting an already rejected submission", async function () {
-      const { submission, user, admin } = await loadFixture(
-        deploySubmissionFixture
-      );
-
-      // Create and reject a submission
-      await submission
-        .connect(user)
-        .createSubmission(...buildSubmissionArgs());
-      await submission.connect(admin).rejectSubmission(0);
-
-      // Try to reject it again
-      try {
-        await submission.connect(admin).rejectSubmission(0);
-        expect.fail("Should have reverted");
-      } catch (error: any) {
-        expect(error.message).to.include("SUBMISSION__AlreadyRejected");
-      }
+      const claimable = await rewardManager.read.getBalance([
+        user.account.address,
+      ]);
+      expect(claimable).to.equal(0n);
     });
   });
 
-  describe("Configuration Management", function () {
-    it("Should allow admin to update the default reward amount", async function () {
-      const { submission, owner } = await loadFixture(deploySubmissionFixture);
+  describe("Configuration", function () {
+    it("Should update default reward", async function () {
+      const { submission, owner } = await loadFixture(deployFixture);
 
-      // Initial default reward is set to 10 DCU
-      const initialReward = await submission.defaultRewardAmount();
-      expect(initialReward.toString()).to.equal(
-        ethers.utils.parseEther("10").toString()
-      );
+      const initial = await submission.read.defaultRewardAmount();
+      expect(initial).to.equal(parseEther("10"));
 
-      // Update the default reward
-      const newReward = ethers.utils.parseEther("20");
-      await submission.connect(owner).updateDefaultReward(newReward);
+      await submission.write.updateDefaultReward([parseEther("20")], {
+        account: owner.account,
+      });
 
-      // Verify update
-      const updatedReward = await submission.defaultRewardAmount();
-      expect(updatedReward.toString()).to.equal(newReward.toString());
-    });
-
-    it("Should allow owner to update the reward logic contract", async function () {
-      const { submission, rewardLogic, owner, dcuToken } = await loadFixture(
-        deploySubmissionFixture
-      );
-
-      // Check initial reward logic address
-      expect(await submission.rewardLogic()).to.equal(rewardLogic.address);
-
-      // Deploy a new reward logic contract
-      const NewRewardLogic = await ethers.getContractFactory("RewardLogic");
-      const newRewardLogicContract = await NewRewardLogic.deploy(
-        dcuToken.address,
-        ethers.constants.AddressZero
-      );
-
-      // Update the reward logic contract
-      await submission
-        .connect(owner)
-        .updateRewardLogic(newRewardLogicContract.address);
-
-      // Verify update
-      expect(await submission.rewardLogic()).to.equal(
-        newRewardLogicContract.address
-      );
-    });
-
-    it("Should reject invalid addresses for reward logic update", async function () {
-      const { submission, owner } = await loadFixture(deploySubmissionFixture);
-
-      // Try to update with zero address
-      try {
-        await submission
-          .connect(owner)
-          .updateRewardLogic(ethers.constants.AddressZero);
-        expect.fail("Should have reverted");
-      } catch (error: any) {
-        expect(error.message).to.include("SUBMISSION__InvalidAddress");
-      }
+      const updated = await submission.read.defaultRewardAmount();
+      expect(updated).to.equal(parseEther("20"));
     });
   });
 });

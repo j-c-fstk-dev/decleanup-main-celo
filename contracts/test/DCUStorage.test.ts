@@ -1,286 +1,326 @@
 import { expect } from "chai";
 import hre from "hardhat";
-import { Contract, utils } from "ethers";
-import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
+import { parseEther } from "viem";
 
 describe("DCUStorage", function () {
-  let DCUStorage: any;
-  let dcuStorage: Contract;
-  let owner: SignerWithAddress;
-  let addr1: SignerWithAddress;
-  let addr2: SignerWithAddress;
-  let addrs: SignerWithAddress[];
+  let dcuStorage: any;
+  let owner: any;
+  let addr1: any;
+  let addr2: any;
+  let addrs: any[];
 
   beforeEach(async function () {
-    // Get the ContractFactory and Signers
-    const ethers = hre.ethers;
-    DCUStorage = await ethers.getContractFactory("DCUStorage");
-    [owner, addr1, addr2, ...addrs] = await ethers.getSigners();
+    const wallets = await hre.viem.getWalletClients();
+    [owner, addr1, addr2, ...addrs] = wallets;
 
-    // Deploy the contract
-    dcuStorage = await DCUStorage.deploy();
+    dcuStorage = await hre.viem.deployContract("DCUStorage");
   });
 
   describe("Deployment", function () {
     it("Should set the right owner", async function () {
-      expect(await dcuStorage.owner()).to.equal(owner.address);
+      // normalize case — viem returns checksummed / mixed-case addresses, compare lowercased
+      const actualOwner = (await dcuStorage.read.owner()) as `0x${string}`;
+      expect(actualOwner.toLowerCase()).to.equal(owner.account.address.toLowerCase());
     });
 
     it("Should assign roles to the owner", async function () {
-      const MINTER_ROLE = await dcuStorage.MINTER_ROLE();
-      const GOVERNANCE_ROLE = await dcuStorage.GOVERNANCE_ROLE();
+      const MINTER_ROLE = await dcuStorage.read.MINTER_ROLE();
+      const GOVERNANCE_ROLE = await dcuStorage.read.GOVERNANCE_ROLE();
 
-      expect(await dcuStorage.hasRole(MINTER_ROLE, owner.address)).to.equal(
-        true
-      );
-      expect(await dcuStorage.hasRole(GOVERNANCE_ROLE, owner.address)).to.equal(
-        true
-      );
+      expect(
+        await dcuStorage.read.hasRole([MINTER_ROLE, owner.account.address])
+      ).to.equal(true);
+
+      expect(
+        await dcuStorage.read.hasRole([GOVERNANCE_ROLE, owner.account.address])
+      ).to.equal(true);
     });
 
     it("Should whitelist the owner and contract", async function () {
-      expect(await dcuStorage.whitelisted(owner.address)).to.equal(true);
-      expect(await dcuStorage.whitelisted(dcuStorage.address)).to.equal(true);
+      expect(
+        await dcuStorage.read.whitelisted([owner.account.address])
+      ).to.equal(true);
+
+      expect(await dcuStorage.read.whitelisted([dcuStorage.address])).to.equal(
+        true
+      );
     });
 
     it("Should set TGE status to false initially", async function () {
-      expect(await dcuStorage.tgeCompleted()).to.equal(false);
+      expect(await dcuStorage.read.tgeCompleted()).to.equal(false);
     });
   });
 
   describe("TGE and Whitelist Management", function () {
     it("Should allow governance to set TGE status", async function () {
-      await dcuStorage.setTGEStatus(true);
-      expect(await dcuStorage.tgeCompleted()).to.equal(true);
+      await dcuStorage.write.setTGEStatus([true], {
+        account: owner.account,
+      });
+
+      expect(await dcuStorage.read.tgeCompleted()).to.equal(true);
     });
 
     it("Should allow governance to add addresses to whitelist", async function () {
-      await dcuStorage.addToWhitelist(addr1.address);
-      expect(await dcuStorage.whitelisted(addr1.address)).to.equal(true);
+      await dcuStorage.write.addToWhitelist([addr1.account.address], {
+        account: owner.account,
+      });
+
+      expect(
+        await dcuStorage.read.whitelisted([addr1.account.address])
+      ).to.equal(true);
     });
 
     it("Should allow governance to remove addresses from whitelist", async function () {
-      await dcuStorage.addToWhitelist(addr1.address);
-      await dcuStorage.removeFromWhitelist(addr1.address);
-      expect(await dcuStorage.whitelisted(addr1.address)).to.equal(false);
+      await dcuStorage.write.addToWhitelist([addr1.account.address], {
+        account: owner.account,
+      });
+
+      await dcuStorage.write.removeFromWhitelist([addr1.account.address], {
+        account: owner.account,
+      });
+
+      expect(
+        await dcuStorage.read.whitelisted([addr1.account.address])
+      ).to.equal(false);
     });
 
     it("Should prevent non-governance from managing whitelist", async function () {
-      await expect(dcuStorage.connect(addr1).addToWhitelist(addr2.address)).to
-        .be.rejected;
+      await expect(
+        dcuStorage.write.addToWhitelist([addr2.account.address], {
+          account: addr1.account,
+        })
+      ).to.be.rejected;
     });
   });
 
   describe("Claimable Balances", function () {
     beforeEach(async function () {
-      // Grant REWARD_MANAGER_ROLE to addr1 for testing
-      const REWARD_MANAGER_ROLE = await dcuStorage.REWARD_MANAGER_ROLE();
-      await dcuStorage.grantRole(REWARD_MANAGER_ROLE, addr1.address);
+      const REWARD_MANAGER_ROLE = await dcuStorage.read.REWARD_MANAGER_ROLE();
+
+      await dcuStorage.write.grantRole(
+        [REWARD_MANAGER_ROLE, addr1.account.address],
+        { account: owner.account }
+      );
     });
 
     it("Should allow reward manager to add claimable balances", async function () {
-      await dcuStorage
-        .connect(addr1)
-        .addClaimableBalance(addr2.address, utils.parseEther("100"));
+      await dcuStorage.write.addClaimableBalance(
+        [addr2.account.address, parseEther("100")],
+        { account: addr1.account }
+      );
 
-      const balance = await dcuStorage.getClaimableBalance(addr2.address);
-      expect(balance.toString()).to.equal(utils.parseEther("100").toString());
+      const balance = await dcuStorage.read.getClaimableBalance([
+        addr2.account.address,
+      ]);
+      expect(balance).to.equal(parseEther("100"));
 
-      const total = await dcuStorage.totalClaimable();
-      expect(total.toString()).to.equal(utils.parseEther("100").toString());
+      const total = await dcuStorage.read.totalClaimable();
+      expect(total).to.equal(parseEther("100"));
     });
 
     it("Should prevent claiming tokens before TGE if not whitelisted", async function () {
-      await dcuStorage
-        .connect(addr1)
-        .addClaimableBalance(addr2.address, utils.parseEther("100"));
+      await dcuStorage.write.addClaimableBalance(
+        [addr2.account.address, parseEther("100")],
+        { account: addr1.account }
+      );
 
       await expect(
-        dcuStorage.connect(addr2).claimTokens(utils.parseEther("50"))
+        dcuStorage.write.claimTokens([parseEther("50")], {
+          account: addr2.account,
+        })
       ).to.be.rejectedWith("Transfers not allowed before TGE");
     });
 
     it("Should allow claiming tokens after TGE", async function () {
-      await dcuStorage
-        .connect(addr1)
-        .addClaimableBalance(addr2.address, utils.parseEther("100"));
-      await dcuStorage.setTGEStatus(true);
-
-      await dcuStorage.connect(addr2).claimTokens(utils.parseEther("50"));
-
-      const claimableBalance = await dcuStorage.getClaimableBalance(
-        addr2.address
-      );
-      expect(claimableBalance.toString()).to.equal(
-        utils.parseEther("50").toString()
+      await dcuStorage.write.addClaimableBalance(
+        [addr2.account.address, parseEther("100")],
+        { account: addr1.account }
       );
 
-      const totalClaimable = await dcuStorage.totalClaimable();
-      expect(totalClaimable.toString()).to.equal(
-        utils.parseEther("50").toString()
-      );
+      await dcuStorage.write.setTGEStatus([true], {
+        account: owner.account,
+      });
 
-      const tokenBalance = await dcuStorage.balanceOf(addr2.address);
-      expect(tokenBalance.toString()).to.equal(
-        utils.parseEther("50").toString()
-      );
+      await dcuStorage.write.claimTokens([parseEther("50")], {
+        account: addr2.account,
+      });
+
+      const claimable = await dcuStorage.read.getClaimableBalance([
+        addr2.account.address,
+      ]);
+      expect(claimable).to.equal(parseEther("50"));
+
+      const total = await dcuStorage.read.totalClaimable();
+      expect(total).to.equal(parseEther("50"));
+
+      const bal = await dcuStorage.read.balanceOf([addr2.account.address]);
+      expect(bal).to.equal(parseEther("50"));
     });
 
     it("Should allow whitelisted addresses to claim tokens before TGE", async function () {
-      await dcuStorage
-        .connect(addr1)
-        .addClaimableBalance(addr2.address, utils.parseEther("100"));
-      await dcuStorage.addToWhitelist(addr2.address);
-
-      await dcuStorage.connect(addr2).claimTokens(utils.parseEther("50"));
-
-      const claimableBalance = await dcuStorage.getClaimableBalance(
-        addr2.address
-      );
-      expect(claimableBalance.toString()).to.equal(
-        utils.parseEther("50").toString()
+      await dcuStorage.write.addClaimableBalance(
+        [addr2.account.address, parseEther("100")],
+        { account: addr1.account }
       );
 
-      const tokenBalance = await dcuStorage.balanceOf(addr2.address);
-      expect(tokenBalance.toString()).to.equal(
-        utils.parseEther("50").toString()
-      );
+      await dcuStorage.write.addToWhitelist([addr2.account.address], {
+        account: owner.account,
+      });
+
+      await dcuStorage.write.claimTokens([parseEther("50")], {
+        account: addr2.account,
+      });
+
+      const claimable = await dcuStorage.read.getClaimableBalance([
+        addr2.account.address,
+      ]);
+      expect(claimable).to.equal(parseEther("50"));
+
+      const bal = await dcuStorage.read.balanceOf([addr2.account.address]);
+      expect(bal).to.equal(parseEther("50"));
     });
   });
 
   describe("Token Transfers", function () {
     beforeEach(async function () {
-      // Grant MINTER_ROLE to owner for testing
-      await dcuStorage.mint(owner.address, utils.parseEther("1000"));
+      await dcuStorage.write.mint([owner.account.address, parseEther("1000")], {
+        account: owner.account,
+      });
     });
 
     it("Should prevent transfers before TGE if not whitelisted", async function () {
-      await expect(dcuStorage.transfer(addr1.address, utils.parseEther("100")))
-        .to.not.be.rejected; // Owner is whitelisted by default
+      await expect(
+        dcuStorage.write.transfer([addr1.account.address, parseEther("100")], {
+          account: owner.account,
+        })
+      ).to.not.be.rejected;
 
       await expect(
-        dcuStorage
-          .connect(addr1)
-          .transfer(addr2.address, utils.parseEther("50"))
+        dcuStorage.write.transfer([addr2.account.address, parseEther("50")], {
+          account: addr1.account,
+        })
       ).to.be.rejectedWith("Transfers not allowed before TGE");
     });
 
     it("Should allow transfers after TGE", async function () {
-      await dcuStorage.setTGEStatus(true);
-      await dcuStorage.transfer(addr1.address, utils.parseEther("100"));
+      await dcuStorage.write.setTGEStatus([true], {
+        account: owner.account,
+      });
 
-      await dcuStorage
-        .connect(addr1)
-        .transfer(addr2.address, utils.parseEther("50"));
+      await dcuStorage.write.transfer([addr1.account.address, parseEther("100")], {
+        account: owner.account,
+      });
 
-      const balance = await dcuStorage.balanceOf(addr2.address);
-      expect(balance.toString()).to.equal(utils.parseEther("50").toString());
+      await dcuStorage.write.transfer([addr2.account.address, parseEther("50")], {
+        account: addr1.account,
+      });
+
+      const bal = await dcuStorage.read.balanceOf([addr2.account.address]);
+      expect(bal).to.equal(parseEther("50"));
     });
   });
 
-  describe("Staking and Locking", function () {
+  describe("Staking & Locking", function () {
     beforeEach(async function () {
-      // Mint tokens to addr1 for testing
-      await dcuStorage.mint(addr1.address, utils.parseEther("1000"));
-      // Set TGE to true for easier testing
-      await dcuStorage.setTGEStatus(true);
+      await dcuStorage.write.mint([addr1.account.address, parseEther("1000")], {
+        account: owner.account,
+      });
+
+      await dcuStorage.write.setTGEStatus([true], {
+        account: owner.account,
+      });
     });
 
-    it("Should allow users to stake tokens", async function () {
-      await dcuStorage.connect(addr1).stake(utils.parseEther("500"));
+    it("Should stake", async function () {
+      await dcuStorage.write.stake([parseEther("500")], {
+        account: addr1.account,
+      });
 
-      const stakedBalance = await dcuStorage.getStakedBalance(addr1.address);
-      expect(stakedBalance.toString()).to.equal(
-        utils.parseEther("500").toString()
-      );
-
-      const userBalance = await dcuStorage.balanceOf(addr1.address);
-      expect(userBalance.toString()).to.equal(
-        utils.parseEther("500").toString()
-      );
-
-      const contractBalance = await dcuStorage.balanceOf(dcuStorage.address);
-      expect(contractBalance.toString()).to.equal(
-        utils.parseEther("500").toString()
-      );
+      const staked = await dcuStorage.read.getStakedBalance([
+        addr1.account.address,
+      ]);
+      expect(staked).to.equal(parseEther("500"));
     });
 
-    it("Should allow users to unstake tokens", async function () {
-      await dcuStorage.connect(addr1).stake(utils.parseEther("500"));
-      await dcuStorage.connect(addr1).unstake(utils.parseEther("200"));
+    it("Should unstake", async function () {
+      await dcuStorage.write.stake([parseEther("500")], {
+        account: addr1.account,
+      });
 
-      const stakedBalance = await dcuStorage.getStakedBalance(addr1.address);
-      expect(stakedBalance.toString()).to.equal(
-        utils.parseEther("300").toString()
-      );
+      await dcuStorage.write.unstake([parseEther("200")], {
+        account: addr1.account,
+      });
 
-      const userBalance = await dcuStorage.balanceOf(addr1.address);
-      expect(userBalance.toString()).to.equal(
-        utils.parseEther("700").toString()
-      );
+      const staked = await dcuStorage.read.getStakedBalance([
+        addr1.account.address,
+      ]);
+      expect(staked).to.equal(parseEther("300"));
     });
 
-    it("Should allow users to lock tokens", async function () {
-      const oneWeek = 7 * 24 * 60 * 60; // 1 week in seconds
+    it("Should lock tokens", async function () {
+      const oneWeek = 7 * 24 * 60 * 60;
 
-      await dcuStorage
-        .connect(addr1)
-        .lockTokens(utils.parseEther("300"), oneWeek);
-
-      const [lockedAmount, releaseTime] = await dcuStorage.getLockedBalance(
-        addr1.address
-      );
-      expect(lockedAmount.toString()).to.equal(
-        utils.parseEther("300").toString()
+      await dcuStorage.write.lockTokens(
+        [parseEther("300"), BigInt(oneWeek)],
+        { account: addr1.account }
       );
 
-      const userBalance = await dcuStorage.balanceOf(addr1.address);
-      expect(userBalance.toString()).to.equal(
-        utils.parseEther("700").toString()
-      );
+      const [locked] = await dcuStorage.read.getLockedBalance([
+        addr1.account.address,
+      ]);
+      expect(locked).to.equal(parseEther("300"));
     });
 
-    it("Should prevent unlocking tokens before release time", async function () {
-      const oneWeek = 7 * 24 * 60 * 60; // 1 week in seconds
+    it("Should not unlock early", async function () {
+      const oneWeek = 7 * 24 * 60 * 60;
 
-      await dcuStorage
-        .connect(addr1)
-        .lockTokens(utils.parseEther("300"), oneWeek);
-
-      await expect(dcuStorage.connect(addr1).unlockTokens()).to.be.rejectedWith(
-        "Tokens still locked"
+      await dcuStorage.write.lockTokens(
+        [parseEther("300"), BigInt(oneWeek)],
+        { account: addr1.account }
       );
+
+      await expect(
+        dcuStorage.write.unlockTokens([], { account: addr1.account })
+      ).to.be.rejectedWith("Tokens still locked");
     });
   });
 
   describe("Governance", function () {
-    it("Should allow updating governance address", async function () {
-      await dcuStorage.updateGovernance(addr1.address);
+    it("Should update governance", async function () {
+      await dcuStorage.write.updateGovernance([addr1.account.address], {
+        account: owner.account,
+      });
 
-      const GOVERNANCE_ROLE = await dcuStorage.GOVERNANCE_ROLE();
-      expect(await dcuStorage.hasRole(GOVERNANCE_ROLE, addr1.address)).to.equal(
-        true
-      );
-      expect(await dcuStorage.hasRole(GOVERNANCE_ROLE, owner.address)).to.equal(
-        false
-      );
-    });
+      const GOVERNANCE_ROLE = await dcuStorage.read.GOVERNANCE_ROLE();
 
-    it("Should allow setting staking contract", async function () {
-      await dcuStorage.setStakingContract(addr1.address);
-
-      const STAKING_ROLE = await dcuStorage.STAKING_ROLE();
-      expect(await dcuStorage.hasRole(STAKING_ROLE, addr1.address)).to.equal(
-        true
-      );
-    });
-
-    it("Should allow setting reward manager", async function () {
-      await dcuStorage.setRewardManager(addr1.address);
-
-      const REWARD_MANAGER_ROLE = await dcuStorage.REWARD_MANAGER_ROLE();
       expect(
-        await dcuStorage.hasRole(REWARD_MANAGER_ROLE, addr1.address)
+        await dcuStorage.read.hasRole([GOVERNANCE_ROLE, addr1.account.address])
+      ).to.equal(true);
+
+      expect(
+        await dcuStorage.read.hasRole([GOVERNANCE_ROLE, owner.account.address])
+      ).to.equal(false);
+    });
+
+    it("Should set staking contract", async function () {
+      await dcuStorage.write.setStakingContract([addr1.account.address], {
+        account: owner.account,
+      });
+
+      const STAKING_ROLE = await dcuStorage.read.STAKING_ROLE();
+      expect(
+        await dcuStorage.read.hasRole([STAKING_ROLE, addr1.account.address])
+      ).to.equal(true);
+    });
+
+    it("Should set reward manager", async function () {
+      await dcuStorage.write.setRewardManager([addr1.account.address], {
+        account: owner.account,
+      });
+
+      const ROLE = await dcuStorage.read.REWARD_MANAGER_ROLE();
+      expect(
+        await dcuStorage.read.hasRole([ROLE, addr1.account.address])
       ).to.equal(true);
     });
   });

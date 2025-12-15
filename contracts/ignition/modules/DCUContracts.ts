@@ -1,9 +1,12 @@
-import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
+import {
+  buildModule,
+  ModuleBuilder,
+} from "@nomicfoundation/hardhat-ignition/modules";
 
 /**
  * Ignition module for deploying all DCU contracts
  */
-export default buildModule("DCUContracts", (m) => {
+export default buildModule("DCUContracts", (m: ModuleBuilder) => {
   // Deploy the DCUStorage contract first
   const dcuStorage = m.contract("DCUStorage");
 
@@ -13,11 +16,8 @@ export default buildModule("DCUContracts", (m) => {
   // Deploy the NFTCollection contract
   const nftCollection = m.contract("NFTCollection");
 
-  // Deploy the RewardLogic contract with DCUStorage and NFTCollection addresses
-  const rewardLogic = m.contract("RewardLogic", [dcuStorage, nftCollection]);
-
-  // Deploy the DCU token with RewardLogic contract address (no max supply parameter anymore)
-  const dcuToken = m.contract("DCUToken", [rewardLogic]);
+  // Deploy the DCU token
+  const dcuToken = m.contract("DCUToken");
 
   // Deploy the DCURewardManager contract with DCUToken address
   const dcuRewardManager = m.contract("DCURewardManager", [
@@ -25,15 +25,19 @@ export default buildModule("DCUContracts", (m) => {
     nftCollection,
   ]);
 
+  // Grant the MINTER_ROLE to the DCURewardManager contract
+  m.call(dcuToken, "grantRole", [
+    m.keccak256("MINTER_ROLE"),
+    dcuRewardManager,
+  ]);
+
   // Deploy the ImpactProductNFT contract with DCURewardManager address
   const impactProductNFT = m.contract("ImpactProductNFT", [dcuRewardManager]);
 
   // Deploy the Submission contract
-  // Constructor: (address _dcuToken, address _rewardLogic, address _rewardManager, uint256 _defaultRewardAmount)
   const submission = m.contract("Submission", [
     dcuToken,
-    rewardLogic,
-    dcuRewardManager, // DCURewardManager address (required for verifier rewards)
+    dcuRewardManager,
     "10000000000000000000", // 10 DCU default reward (in wei)
   ]);
 
@@ -42,7 +46,6 @@ export default buildModule("DCUContracts", (m) => {
     dcuStorage,
     dcuAccounting,
     nftCollection,
-    rewardLogic,
     dcuToken,
     dcuRewardManager,
     impactProductNFT,
