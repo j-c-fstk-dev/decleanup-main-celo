@@ -25,6 +25,13 @@ export interface CleanupDetails {
   claimed: boolean
   rejected: boolean
   level: number
+  // Additional fields from contract
+  dataURI?: string
+  impactFormDataHash?: string
+  hasImpactForm?: boolean
+  hasRecyclables?: boolean
+  recyclablesPhotoHash?: string
+  recyclablesReceiptHash?: string
 }
 
 /* -------------------------------------------------------------------------- */
@@ -39,6 +46,61 @@ const SUBMISSION_ADDRESS =
 /* -------------------------------------------------------------------------- */
 
 const SUBMISSION_ABI = [
+  // Custom Errors - must be included for proper error decoding
+  {
+    type: 'error',
+    name: 'SUBMISSION__InvalidAddress',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'SUBMISSION__InvalidSubmissionData',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'SUBMISSION__SubmissionNotFound',
+    inputs: [{ name: 'submissionId', type: 'uint256' }],
+  },
+  {
+    type: 'error',
+    name: 'SUBMISSION__Unauthorized',
+    inputs: [{ name: 'user', type: 'address' }],
+  },
+  {
+    type: 'error',
+    name: 'SUBMISSION__AlreadyApproved',
+    inputs: [{ name: 'submissionId', type: 'uint256' }],
+  },
+  {
+    type: 'error',
+    name: 'SUBMISSION__AlreadyRejected',
+    inputs: [{ name: 'submissionId', type: 'uint256' }],
+  },
+  {
+    type: 'error',
+    name: 'SUBMISSION__NoRewardsAvailable',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'SUBMISSION__InsufficientSubmissionFee',
+    inputs: [
+      { name: 'sent', type: 'uint256' },
+      { name: 'required', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'error',
+    name: 'SUBMISSION__RefundFailed',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'SUBMISSION__CannotRefundApprovedSubmission',
+    inputs: [{ name: 'submissionId', type: 'uint256' }],
+  },
+  // Functions
   {
     type: 'function',
     name: 'getSubmissionDetails',
@@ -49,13 +111,23 @@ const SUBMISSION_ABI = [
         components: [
           { name: 'id', type: 'uint256' },
           { name: 'submitter', type: 'address' },
+          { name: 'dataURI', type: 'string' },
           { name: 'beforePhotoHash', type: 'string' },
           { name: 'afterPhotoHash', type: 'string' },
+          { name: 'impactFormDataHash', type: 'string' },
           { name: 'latitude', type: 'int256' },
           { name: 'longitude', type: 'int256' },
           { name: 'timestamp', type: 'uint256' },
           { name: 'status', type: 'uint8' },
+          { name: 'approver', type: 'address' },
+          { name: 'processedTimestamp', type: 'uint256' },
           { name: 'rewarded', type: 'bool' },
+          { name: 'feePaid', type: 'uint256' },
+          { name: 'feeRefunded', type: 'bool' },
+          { name: 'hasImpactForm', type: 'bool' },
+          { name: 'hasRecyclables', type: 'bool' },
+          { name: 'recyclablesPhotoHash', type: 'string' },
+          { name: 'recyclablesReceiptHash', type: 'string' },
         ],
         type: 'tuple',
       },
@@ -161,8 +233,12 @@ export async function submitCleanup(
   const latInt256 = BigInt(latScaled)
   const lngInt256 = BigInt(lngScaled)
 
-  // Prepare dataURI (can be empty or contain metadata)
-  const dataURI = ''
+  // Prepare dataURI - contract requires non-empty string
+  // Create a simple metadata reference - in production this should be an actual IPFS hash
+  // For now, use a placeholder that references the submission photos
+  // Format: ipfs://<hash> where hash can be the beforePhotoHash or a combined hash
+  // Using beforePhotoHash as the dataURI reference since it's required and unique per submission
+  const dataURI = `ipfs://${beforeHash}` // Contract requires non-empty dataURI - using before photo hash as reference
 
   // Referrer address (use zero address if none)
   const referrer = (_referrer && _referrer !== '0x0000000000000000000000000000000000000000') 
@@ -181,6 +257,8 @@ export async function submitCleanup(
     })
 
     // Submit the transaction
+    // Note: Gas will be estimated automatically by wagmi/viem
+    // If estimation fails, it usually means the transaction would revert
     const contractConfig: any = {
       address: SUBMISSION_ADDRESS,
       abi: SUBMISSION_ABI,
@@ -195,12 +273,26 @@ export async function submitCleanup(
         referrer,
       ],
       account: account.address,
+      // Add explicit gas limit for large transactions (string parameters can be large)
+      // 1M gas should be sufficient for createSubmission with IPFS hashes
+      // This helps avoid RPC errors when automatic gas estimation fails
+      gas: 1000000n,
     }
 
     // Only include value if fee is provided and > 0
     if (_fee && _fee > 0n) {
       contractConfig.value = _fee
     }
+
+    console.log('Submitting transaction with args:', {
+      dataURI: dataURI.substring(0, 50) + '...',
+      beforeHash: beforeHash.substring(0, 20) + '...',
+      afterHash: afterHash.substring(0, 20) + '...',
+      impactFormDataHash: impactFormDataHash || '(empty)',
+      lat: latInt256.toString(),
+      lng: lngInt256.toString(),
+      referrer: referrer,
+    })
 
     const hash = await writeContract(config, contractConfig)
 
@@ -224,7 +316,34 @@ export async function submitCleanup(
     return submissionId
   } catch (error: any) {
     console.error('Error submitting cleanup:', error)
-    throw new Error(`Failed to submit cleanup: ${error?.message || error?.shortMessage || 'Unknown error'}`)
+    
+    // Provide more detailed error messages
+    let errorMessage = 'Unknown error'
+    
+    if (error?.message) {
+      errorMessage = error.message
+    } else if (error?.shortMessage) {
+      errorMessage = error.shortMessage
+    } else if (error?.cause?.message) {
+      errorMessage = error.cause.message
+    } else if (typeof error === 'string') {
+      errorMessage = error
+    }
+    
+    // Check for common RPC errors
+    if (errorMessage.includes('RPC') || errorMessage.includes('network') || errorMessage.includes('fetch')) {
+      errorMessage = `Network error: ${errorMessage}. Please check your internet connection and try again.`
+    }
+    
+    // Check for revert reasons
+    if (error?.data || error?.cause?.data) {
+      const revertData = error.data || error.cause.data
+      if (revertData) {
+        errorMessage = `Transaction reverted: ${revertData}`
+      }
+    }
+    
+    throw new Error(`Failed to submit cleanup: ${errorMessage}`)
   }
 }
 
@@ -248,27 +367,65 @@ export async function getCleanupDetails(
     }
   }
 
-  const result: any = await readContract(config, {
-    address: SUBMISSION_ADDRESS,
-    abi: SUBMISSION_ABI,
-    functionName: 'getSubmissionDetails',
-    args: [cleanupId],
-  })
+  try {
+    const result: any = await readContract(config, {
+      address: SUBMISSION_ADDRESS,
+      abi: SUBMISSION_ABI,
+      functionName: 'getSubmissionDetails',
+      args: [cleanupId],
+    })
 
-  const status = Number(result.status)
+    const status = Number(result.status)
 
-  return {
-    id: result.id,
-    user: result.submitter as Address,
-    beforePhotoHash: result.beforePhotoHash,
-    afterPhotoHash: result.afterPhotoHash,
-    timestamp: result.timestamp,
-    latitude: result.latitude,
-    longitude: result.longitude,
-    verified: status === CleanupStatus.Approved,
-    rejected: status === CleanupStatus.Rejected,
-    claimed: result.rewarded,
-    level: status === CleanupStatus.Approved ? 1 : 0,
+    return {
+      id: result.id,
+      user: result.submitter as Address,
+      beforePhotoHash: result.beforePhotoHash || '',
+      afterPhotoHash: result.afterPhotoHash || '',
+      timestamp: result.timestamp,
+      latitude: result.latitude,
+      longitude: result.longitude,
+      verified: status === CleanupStatus.Approved,
+      rejected: status === CleanupStatus.Rejected,
+      claimed: result.rewarded,
+      level: status === CleanupStatus.Approved ? 1 : 0,
+      // Additional fields
+      dataURI: result.dataURI,
+      impactFormDataHash: result.impactFormDataHash,
+      hasImpactForm: result.hasImpactForm || false,
+      hasRecyclables: result.hasRecyclables || false,
+      recyclablesPhotoHash: result.recyclablesPhotoHash || '',
+      recyclablesReceiptHash: result.recyclablesReceiptHash || '',
+    }
+  } catch (error: any) {
+    // Handle case where submission doesn't exist
+    const errorMessage = error?.message || error?.shortMessage || String(error)
+    const isNotFound = 
+      errorMessage.includes('SUBMISSION__SubmissionNotFound') ||
+      errorMessage.includes('SubmissionNotFound') ||
+      errorMessage.includes('0xa503ddf5') // Error signature for SUBMISSION__SubmissionNotFound
+    
+    if (isNotFound) {
+      // Return a default/empty cleanup details for non-existent submissions
+      console.warn(`Submission ${cleanupId.toString()} not found on contract`)
+      return {
+        id: cleanupId,
+        user: '0x0000000000000000000000000000000000000000',
+        beforePhotoHash: '',
+        afterPhotoHash: '',
+        timestamp: 0n,
+        latitude: 0n,
+        longitude: 0n,
+        verified: false,
+        claimed: false,
+        rejected: false,
+        level: 0,
+      }
+    }
+    
+    // Re-throw other errors
+    console.error('Error fetching cleanup details:', error)
+    throw error
   }
 }
 
@@ -350,6 +507,12 @@ export async function verifyCleanup(
   }
 
   try {
+    console.log('Verifying cleanup:', {
+      submissionId: cleanupId.toString(),
+      contractAddress: SUBMISSION_ADDRESS,
+      account: account.address,
+    })
+
     const hash = await writeContract(config, {
       address: SUBMISSION_ADDRESS,
       abi: SUBMISSION_ABI,
@@ -358,11 +521,57 @@ export async function verifyCleanup(
       account: account.address,
     })
 
-    await waitForTransactionReceipt(config, { hash })
+    console.log('Transaction hash:', hash)
+    console.log('Waiting for transaction receipt...')
+
+    // Wait for receipt with polling and timeout
+    // Add polling options for better reliability on slow RPCs
+    const receipt = await Promise.race([
+      waitForTransactionReceipt(config, { 
+        hash,
+        confirmations: 1, // Wait for 1 confirmation
+        pollingInterval: 2000, // Poll every 2 seconds
+        timeout: 120000, // 120 second timeout
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Transaction timeout: Receipt not received within 120 seconds')), 120000)
+      )
+    ]) as any
+
+    console.log('Transaction receipt received:', receipt)
+    
+    // Check if transaction failed
+    if (receipt.status === 'reverted' || receipt.status === 0) {
+      throw new Error('Transaction reverted on chain')
+    }
+
     return hash
   } catch (error: any) {
     console.error('Error verifying cleanup:', error)
-    throw new Error(`Failed to verify cleanup: ${error?.message || error?.shortMessage || 'Unknown error'}`)
+    
+    // Provide more detailed error messages
+    let errorMessage = 'Unknown error'
+    
+    if (error?.message) {
+      errorMessage = error.message
+    } else if (error?.shortMessage) {
+      errorMessage = error.shortMessage
+    } else if (error?.cause?.message) {
+      errorMessage = error.cause.message
+    } else if (typeof error === 'string') {
+      errorMessage = error
+    }
+    
+    // Check for common errors
+    if (errorMessage.includes('revert') || errorMessage.includes('reverted')) {
+      errorMessage = `Transaction reverted: ${errorMessage}. The submission may already be verified/rejected, or you may not have the VERIFIER_ROLE.`
+    } else if (errorMessage.includes('timeout')) {
+      errorMessage = `Transaction timeout: ${errorMessage}. The transaction may still be pending. Check the block explorer.`
+    } else if (errorMessage.includes('user rejected') || errorMessage.includes('rejected')) {
+      errorMessage = 'Transaction was rejected by user.'
+    }
+    
+    throw new Error(`Failed to verify cleanup: ${errorMessage}`)
   }
 }
 
@@ -379,6 +588,12 @@ export async function rejectCleanup(
   }
 
   try {
+    console.log('Rejecting cleanup:', {
+      submissionId: cleanupId.toString(),
+      contractAddress: SUBMISSION_ADDRESS,
+      account: account.address,
+    })
+
     const hash = await writeContract(config, {
       address: SUBMISSION_ADDRESS,
       abi: SUBMISSION_ABI,
@@ -387,11 +602,57 @@ export async function rejectCleanup(
       account: account.address,
     })
 
-    await waitForTransactionReceipt(config, { hash })
+    console.log('Transaction hash:', hash)
+    console.log('Waiting for transaction receipt...')
+
+    // Wait for receipt with polling and timeout
+    // Add polling options for better reliability on slow RPCs
+    const receipt = await Promise.race([
+      waitForTransactionReceipt(config, { 
+        hash,
+        confirmations: 1, // Wait for 1 confirmation
+        pollingInterval: 2000, // Poll every 2 seconds
+        timeout: 120000, // 120 second timeout
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Transaction timeout: Receipt not received within 120 seconds')), 120000)
+      )
+    ]) as any
+
+    console.log('Transaction receipt received:', receipt)
+    
+    // Check if transaction failed
+    if (receipt.status === 'reverted' || receipt.status === 0) {
+      throw new Error('Transaction reverted on chain')
+    }
+
     return hash
   } catch (error: any) {
     console.error('Error rejecting cleanup:', error)
-    throw new Error(`Failed to reject cleanup: ${error?.message || error?.shortMessage || 'Unknown error'}`)
+    
+    // Provide more detailed error messages
+    let errorMessage = 'Unknown error'
+    
+    if (error?.message) {
+      errorMessage = error.message
+    } else if (error?.shortMessage) {
+      errorMessage = error.shortMessage
+    } else if (error?.cause?.message) {
+      errorMessage = error.cause.message
+    } else if (typeof error === 'string') {
+      errorMessage = error
+    }
+    
+    // Check for common errors
+    if (errorMessage.includes('revert') || errorMessage.includes('reverted')) {
+      errorMessage = `Transaction reverted: ${errorMessage}. The submission may already be verified/rejected, or you may not have the VERIFIER_ROLE.`
+    } else if (errorMessage.includes('timeout')) {
+      errorMessage = `Transaction timeout: ${errorMessage}. The transaction may still be pending. Check the block explorer.`
+    } else if (errorMessage.includes('user rejected') || errorMessage.includes('rejected')) {
+      errorMessage = 'Transaction was rejected by user.'
+    }
+    
+    throw new Error(`Failed to reject cleanup: ${errorMessage}`)
   }
 }
 

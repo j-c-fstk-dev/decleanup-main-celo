@@ -18,6 +18,17 @@ const nextConfig = {
       },
     ];
   },
+  // Webpack configuration to handle MetaMask SDK warnings
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Resolve React Native async storage for browser (MetaMask SDK compatibility)
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@react-native-async-storage/async-storage': false,
+      };
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

@@ -14,6 +14,9 @@ import {
 } from '@/lib/blockchain/contracts'
 import { getIPFSUrl } from '@/lib/blockchain/ipfs'
 import type { Address } from 'viem'
+import { REQUIRED_BLOCK_EXPLORER_URL } from '@/lib/blockchain/wagmi'
+
+const BLOCK_EXPLORER_URL = REQUIRED_BLOCK_EXPLORER_URL || 'https://celo-sepolia.blockscout.com'
 
 interface CleanupSubmission {
     id: bigint
@@ -27,6 +30,12 @@ interface CleanupSubmission {
     claimed: boolean
     rejected: boolean
     level: number
+    // Additional fields
+    hasImpactForm?: boolean
+    hasRecyclables?: boolean
+    recyclablesPhotoHash?: string
+    recyclablesReceiptHash?: string
+    impactFormDataHash?: string
 }
 
 const VERIFIER_AUTH_MESSAGE = 'I am requesting access to the DeCleanup Verifier Dashboard. This signature proves I control this wallet address.'
@@ -151,14 +160,18 @@ export default function VerifierPage() {
             const submissions: CleanupSubmission[] = []
 
             // Fetch in reverse order (newest first)
-            for (let i = Number(count); i >= 1; i--) {
+            // Submission IDs are 0-indexed, so we go from count-1 down to 0
+            const countNum = Number(count)
+            for (let i = countNum - 1; i >= 0; i--) {
                 const id = BigInt(i)
                 try {
                     const details = await getCleanupDetails(id)
-                    submissions.push({
-                        ...details
-                      })
-                      
+                    // Only add if submission exists (has non-zero user address)
+                    if (details.user && details.user !== '0x0000000000000000000000000000000000000000') {
+                        submissions.push({
+                            ...details
+                        })
+                    }
                 } catch (err) {
                     console.warn(`Failed to fetch cleanup ${id}`, err)
                 }
@@ -171,14 +184,35 @@ export default function VerifierPage() {
 
     const handleVerify = async (id: bigint) => {
         setProcessingId(id)
+        setError(null)
         try {
             // Default level 1 for now, could add UI to select level
-            await verifyCleanup(id, 1)
-            alert('Cleanup verified successfully!')
-            fetchCleanups()
-        } catch (error) {
+            console.log('Starting verification for submission:', id.toString())
+            const txHash = await verifyCleanup(id, 1)
+            console.log('Verification successful, transaction hash:', txHash)
+            
+            const txUrl = `${BLOCK_EXPLORER_URL}/tx/${txHash}`
+            const message = `Cleanup verified successfully!\n\nTransaction: ${txHash.slice(0, 10)}...${txHash.slice(-8)}\n\nView on block explorer: ${txUrl}`
+            alert(message)
+            
+            // Refresh cleanups after a short delay to allow blockchain state to update
+            setTimeout(() => {
+                fetchCleanups()
+            }, 2000)
+        } catch (error: any) {
             console.error('Error verifying cleanup:', error)
-            alert('Failed to verify cleanup.')
+            const errorMessage = error?.message || 'Failed to verify cleanup. Please check the console for details.'
+            setError(errorMessage)
+            
+            // If error contains a transaction hash, provide a link
+            const txHashMatch = errorMessage.match(/0x[a-fA-F0-9]{64}/i)
+            if (txHashMatch) {
+                const txHash = txHashMatch[0]
+                const txUrl = `${BLOCK_EXPLORER_URL}/tx/${txHash}`
+                alert(`Failed to verify cleanup: ${errorMessage}\n\nTransaction may still be pending. Check: ${txUrl}`)
+            } else {
+                alert(`Failed to verify cleanup: ${errorMessage}`)
+            }
         } finally {
             setProcessingId(null)
         }
@@ -186,13 +220,34 @@ export default function VerifierPage() {
 
     const handleReject = async (id: bigint) => {
         setProcessingId(id)
+        setError(null)
         try {
-            await rejectCleanup(id)
-            alert('Cleanup rejected successfully!')
-            fetchCleanups()
-        } catch (error) {
+            console.log('Starting rejection for submission:', id.toString())
+            const txHash = await rejectCleanup(id)
+            console.log('Rejection successful, transaction hash:', txHash)
+            
+            const txUrl = `${BLOCK_EXPLORER_URL}/tx/${txHash}`
+            const message = `Cleanup rejected successfully!\n\nTransaction: ${txHash.slice(0, 10)}...${txHash.slice(-8)}\n\nView on block explorer: ${txUrl}`
+            alert(message)
+            
+            // Refresh cleanups after a short delay to allow blockchain state to update
+            setTimeout(() => {
+                fetchCleanups()
+            }, 2000)
+        } catch (error: any) {
             console.error('Error rejecting cleanup:', error)
-            alert('Failed to reject cleanup.')
+            const errorMessage = error?.message || 'Failed to reject cleanup. Please check the console for details.'
+            setError(errorMessage)
+            
+            // If error contains a transaction hash, provide a link
+            const txHashMatch = errorMessage.match(/0x[a-fA-F0-9]{64}/i)
+            if (txHashMatch) {
+                const txHash = txHashMatch[0]
+                const txUrl = `${BLOCK_EXPLORER_URL}/tx/${txHash}`
+                alert(`Failed to reject cleanup: ${errorMessage}\n\nTransaction may still be pending. Check: ${txUrl}`)
+            } else {
+                alert(`Failed to reject cleanup: ${errorMessage}`)
+            }
         } finally {
             setProcessingId(null)
         }
@@ -394,18 +449,57 @@ export default function VerifierPage() {
                         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                             {pendingCleanups.map(cleanup => (
                                 <div key={cleanup.id.toString()} className="rounded-lg border border-border bg-card overflow-hidden">
-                                    <div className="grid grid-cols-2 gap-1">
-                                        <img src={getIPFSUrl(cleanup.beforePhotoHash)} alt="Before" className="h-32 w-full object-cover" />
-                                        <img src={getIPFSUrl(cleanup.afterPhotoHash)} alt="After" className="h-32 w-full object-cover" />
+                                    <div className="grid grid-cols-2 gap-1 bg-gray-900">
+                                        {cleanup.beforePhotoHash ? (
+                                            <img 
+                                                src={getIPFSUrl(cleanup.beforePhotoHash)} 
+                                                alt="Before" 
+                                                className="h-32 w-full object-cover"
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect width="100" height="100" fill="%23333"/%3E%3Ctext x="50" y="50" text-anchor="middle" fill="%23999" font-size="12"%3EBefore%3C/text%3E%3C/svg%3E'
+                                                }}
+                                            />
+                                        ) : (
+                                            <div className="flex h-32 w-full items-center justify-center bg-gray-800 text-xs text-gray-500">
+                                                Before
+                                            </div>
+                                        )}
+                                        {cleanup.afterPhotoHash ? (
+                                            <img 
+                                                src={getIPFSUrl(cleanup.afterPhotoHash)} 
+                                                alt="After" 
+                                                className="h-32 w-full object-cover"
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect width="100" height="100" fill="%23333"/%3E%3Ctext x="50" y="50" text-anchor="middle" fill="%23999" font-size="12"%3EAfter%3C/text%3E%3C/svg%3E'
+                                                }}
+                                            />
+                                        ) : (
+                                            <div className="flex h-32 w-full items-center justify-center bg-gray-800 text-xs text-gray-500">
+                                                After
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="p-4">
                                         <div className="mb-2 flex items-center justify-between">
                                             <span className="font-mono text-xs text-gray-400">ID: {cleanup.id.toString()}</span>
                                             <span className="rounded-full bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-500">Pending</span>
                                         </div>
-                                        <p className="mb-4 font-mono text-xs text-gray-400 truncate">
+                                        <p className="mb-2 font-mono text-xs text-gray-400 break-all">
                                             User: {cleanup.user}
                                         </p>
+                                        {/* Additional info badges */}
+                                        <div className="mb-3 flex flex-wrap gap-1">
+                                            {cleanup.hasImpactForm && (
+                                                <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+                                                    Impact Report
+                                                </span>
+                                            )}
+                                            {cleanup.hasRecyclables && (
+                                                <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-xs text-purple-400">
+                                                    Recyclables
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex gap-2">
                                             <Button
                                                 onClick={() => handleVerify(cleanup.id)}
@@ -444,9 +538,35 @@ export default function VerifierPage() {
                         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                             {verifiedCleanups.map(cleanup => (
                                 <div key={cleanup.id.toString()} className="rounded-lg border border-border bg-card overflow-hidden opacity-75">
-                                    <div className="grid grid-cols-2 gap-1">
-                                        <img src={getIPFSUrl(cleanup.beforePhotoHash)} alt="Before" className="h-32 w-full object-cover" />
-                                        <img src={getIPFSUrl(cleanup.afterPhotoHash)} alt="After" className="h-32 w-full object-cover" />
+                                    <div className="grid grid-cols-2 gap-1 bg-gray-900">
+                                        {cleanup.beforePhotoHash ? (
+                                            <img 
+                                                src={getIPFSUrl(cleanup.beforePhotoHash)} 
+                                                alt="Before" 
+                                                className="h-32 w-full object-cover"
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect width="100" height="100" fill="%23333"/%3E%3Ctext x="50" y="50" text-anchor="middle" fill="%23999" font-size="12"%3EBefore%3C/text%3E%3C/svg%3E'
+                                                }}
+                                            />
+                                        ) : (
+                                            <div className="flex h-32 w-full items-center justify-center bg-gray-800 text-xs text-gray-500">
+                                                Before
+                                            </div>
+                                        )}
+                                        {cleanup.afterPhotoHash ? (
+                                            <img 
+                                                src={getIPFSUrl(cleanup.afterPhotoHash)} 
+                                                alt="After" 
+                                                className="h-32 w-full object-cover"
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect width="100" height="100" fill="%23333"/%3E%3Ctext x="50" y="50" text-anchor="middle" fill="%23999" font-size="12"%3EAfter%3C/text%3E%3C/svg%3E'
+                                                }}
+                                            />
+                                        ) : (
+                                            <div className="flex h-32 w-full items-center justify-center bg-gray-800 text-xs text-gray-500">
+                                                After
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="p-4">
                                         <div className="mb-2 flex items-center justify-between">

@@ -80,27 +80,77 @@ const APP_ICON_URL =
 // Valora wallet uses WalletConnect protocol and will appear in the WalletConnect modal
 const connectors = []
 
-// Only add injected connector if we are on the client and window.ethereum exists
-if (typeof window !== 'undefined' && (window as any).ethereum) {
-  connectors.push(
-    injected({
-      shimDisconnect: true,
-      target() {
-        return {
-          id: 'browser',
-          name: 'Browser',
-          provider: (window as any).ethereum,
-        }
-      },
-    })
+// Helper to detect MetaMask specifically
+function isMetaMaskInstalled(): boolean {
+  if (typeof window === 'undefined') return false
+  const ethereum = (window as any).ethereum
+  return Boolean(
+    ethereum &&
+    (ethereum.isMetaMask || 
+     ethereum.providers?.some((p: any) => p.isMetaMask) ||
+     ethereum._metamask)
   )
 }
 
-// Only add WalletConnect if Project ID is configured and on client side
-// Use dynamic URL to avoid metadata mismatch warnings (localhost vs production)
-// Only add WalletConnect if Project ID is configured and on client side
-// Use dynamic URL to avoid metadata mismatch warnings (localhost vs production)
-// Fallback to a default Project ID if not configured (for development/testing)
+// Helper to get MetaMask provider (handles multiple providers)
+function getMetaMaskProvider() {
+  if (typeof window === 'undefined') return null
+  const ethereum = (window as any).ethereum
+  
+  // If direct MetaMask
+  if (ethereum?.isMetaMask && !ethereum.providers) {
+    return ethereum
+  }
+  
+  // If multiple providers (e.g., MetaMask + other wallets)
+  if (ethereum?.providers) {
+    const metaMaskProvider = ethereum.providers.find((p: any) => p.isMetaMask)
+    if (metaMaskProvider) return metaMaskProvider
+  }
+  
+  // Fallback to main provider if it's MetaMask
+  if (ethereum?.isMetaMask) {
+    return ethereum
+  }
+  
+  return null
+}
+
+// Prioritize MetaMask (injected) connector - add it first for highest priority
+if (typeof window !== 'undefined') {
+  const metaMaskProvider = getMetaMaskProvider()
+  const hasEthereum = Boolean((window as any).ethereum)
+  
+  if (metaMaskProvider) {
+    // Add MetaMask-specific injected connector with explicit target
+    connectors.push(
+      injected({
+        shimDisconnect: true,
+        // Explicitly target MetaMask
+        target: 'metaMask' as any,
+      })
+    )
+    console.log('MetaMask detected - added as primary connector')
+  } else if (hasEthereum) {
+    // Fallback: use generic injected connector if MetaMask not detected but ethereum exists
+    connectors.push(
+      injected({
+        shimDisconnect: true,
+        target() {
+          return {
+            id: 'browser',
+            name: 'Browser Wallet',
+            provider: (window as any).ethereum,
+          }
+        },
+      })
+    )
+    console.log('Generic injected wallet detected (MetaMask may not be properly detected)')
+  }
+}
+
+// Only add WalletConnect as a fallback option (after injected connectors)
+// This ensures MetaMask is always preferred when available
 const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '3a8170812b534d0ff9d794f19a901d64'
 
 if (typeof window !== 'undefined') {
@@ -113,6 +163,8 @@ if (typeof window !== 'undefined') {
     // This fixes the "metadata.url differs from actual page url" warning
     const currentUrl = window.location.origin
 
+    // Only add WalletConnect if MetaMask is not installed (to avoid QR code when MetaMask is available)
+    // Or always add it but user can choose - actually, let's always add it but prioritize injected
     connectors.push(
       walletConnect({
         projectId: walletConnectProjectId,

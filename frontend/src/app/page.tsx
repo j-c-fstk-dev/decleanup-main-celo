@@ -294,27 +294,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Verifier Stats */}
-            {isVerifierUser && (
-              <div className="rounded-2xl border border-brand-green/30 bg-brand-green/10 p-4 flex-shrink-0">
-                <div className="flex items-center gap-2 mb-3">
-                  <Shield className="h-5 w-5 text-brand-green" />
-                  <h3 className="font-bebas text-xl tracking-wider text-foreground">
-                    VERIFIER
-                  </h3>
-                </div>
-                <div className="rounded-lg border border-brand-green/20 bg-background/50 p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Earned from Verifying</span>
-                    <span className="font-bebas text-lg text-brand-green">0 $cDCU</span>
-                  </div>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
-                    1 $cDCU per verified submission
-                  </p>
-                </div>
-              </div>
-            )}
-
             {/* Invite Friends */}
             <div className="rounded-2xl border border-border bg-card p-4 flex-shrink-0">
               <div className="flex items-center gap-2 mb-3">
@@ -331,7 +310,12 @@ export default function Home() {
                   variant="outline"
                   size="sm"
                   className="gap-2 border-brand-green/30 bg-brand-green/5 px-3 py-2 h-auto text-xs font-bebas tracking-wider text-brand-green hover:bg-brand-green/10 hover:border-brand-green/50"
-                  onClick={() => window.open('https://warpcast.com', '_blank')}
+                  onClick={() => {
+                    if (!address) return
+                    const link = `${window.location.origin}?ref=${address}`
+                    const message = `Join me in @decleanupnet Rewards 🌍\nClean up, prove impact, earn Impact Products, build reputation, and soon vote on global cleanup decisions in the Celo app.\n\nStart here → ${link}`
+                    window.open(`https://warpcast.com/~/compose?text=${encodeURIComponent(message)}`, '_blank')
+                  }}
                 >
                   <Share2 className="h-3.5 w-3.5" />
                   Farcaster
@@ -341,7 +325,10 @@ export default function Home() {
                   size="sm"
                   className="gap-2 border-border px-3 py-2 h-auto text-xs font-bebas tracking-wider hover:bg-accent"
                   onClick={() => {
-                    const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent('Join DeCleanup Rewards!')}`
+                    if (!address) return
+                    const link = `${window.location.origin}?ref=${address}`
+                    const message = `Join me in @decleanupnet Rewards 🌍\nClean up, prove impact, earn Impact Products, build reputation, and soon vote on global cleanup decisions in the Celo app.\n\nStart here → ${link}`
+                    const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(message)}`
                     window.open(xUrl, '_blank')
                   }}
                 >
@@ -358,10 +345,10 @@ export default function Home() {
                     if (!address) return
                     const link = `${window.location.origin}?ref=${address}`
                     try {
-                      await navigator.clipboard.writeText(link)
-                      alert('Referral link copied!')
+                      await navigator.clipboard.writeText('DeCleanup Rewards')
+                      alert('Referral text copied!')
                     } catch (error) {
-                      alert(link)
+                      alert('DeCleanup Rewards')
                     }
                   }}
                 >
@@ -440,12 +427,16 @@ export default function Home() {
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
                   {[
+                    { label: 'WEBSITE', href: 'https://decleanup.net' },
                     { label: 'GITHUB', href: 'https://github.com/DeCleanup-Network' },
-                    { label: 'LITEPAPER', href: 'https://github.com/DeCleanup-Network' },
+                    { label: 'LITEPAPER', href: 'https://decleanup.net/litepaper' },
+                    { label: 'TOKENOMICS', href: 'https://decleanup.net/tokenomics' },
                     { label: 'PUBLICATIONS', href: '#' },
                     { label: 'FOLLOW ON X', href: 'https://x.com/decleanupnet' },
                     { label: 'DONATE ON GIVETH', href: 'https://giveth.io/project/decleanup-network-cleaning-the-planet-empowering-communities' },
                     { label: 'JOIN COMMUNITY', href: 'https://t.me/decleanup' },
+                    { label: 'FARCASTER', href: 'https://farcaster.xyz/decleanupnet' },
+                    { label: 'BUG REPORT', href: 'https://docs.google.com/forms/d/e/1FAIpQLSfWCK4WmO9T-WJOOZwuDiG3yEJVX23RX_AkIa6tZHZ0J9Tf3w/viewform?usp=header' },
                   ].map((link) => (
                     <a
                       key={link.label}
