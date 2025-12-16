@@ -6,6 +6,146 @@ This project adheres to Semantic Versioning.
 
 ---
 
+## [Celo Sepolia Deployment & Integration] – 2025-12-16
+
+This release focuses on deploying the RecyclablesReward contract to Celo Sepolia, implementing the full submission flow with contract integration, and enhancing the verifier dashboard with proper access control and data display.
+
+### 🚀 Contract Deployment & Scripts
+
+**Added**
+- `contracts/scripts/deploy-recyclables.ts` - Deploys RecyclablesReward contract and wires it into Submission contract
+  - Uses real cRECY token address (0x34C11A932853Ae24E845Ad4B633E3cEf91afE583)
+  - Saves deployment addresses to JSON for reference
+- `contracts/scripts/grant-verifier-role.ts` - Script to grant VERIFIER_ROLE to specified addresses
+  - Uses viem-based Hardhat API
+  - Includes delay and re-verification to handle blockchain state timing
+  - Checks multiple deployment address locations (scripts, Ignition, env vars)
+
+**Changed**
+- `contracts/scripts/setup-roles.ts` - Explicitly grants VERIFIER_ROLE to verifier addresses
+- `hardhat.config.ts` - Fixed dotenv.config() to load from project root, ensures PRIVATE_KEY has 0x prefix
+
+**Removed**
+- `contracts/contracts/MockERC20.sol` - No longer needed after real cRECY token address was provided
+
+### 🔗 Frontend - Blockchain Integration
+
+**Added**
+- Full contract integration in `frontend/src/lib/blockchain/contracts.ts`:
+  - `submitCleanup()` - Calls `createSubmission()` with proper parameter handling:
+    - Lat/lng to int256 conversion
+    - Referrer address handling
+    - Impact form data hash
+    - IPFS hash reference in dataURI (ipfs://${beforeHash})
+    - Explicit gas limit (1M) to prevent gas estimation failures
+  - `attachRecyclablesToSubmission()` - Calls `attachRecyclables()` on Submission contract
+  - Verifier functions:
+    - `isVerifier()` - Checks VERIFIER_ROLE
+    - `verifyCleanup()` - Calls `approveSubmission()` with improved error handling
+    - `rejectCleanup()` - Calls `rejectSubmission()` with improved error handling
+    - `getCleanupCounter()` - Gets total submission count
+  - Complete SUBMISSION_ABI with all custom error definitions and CleanupSubmission struct fields
+  - Enhanced `getCleanupDetails()` with graceful error handling for missing submissions
+  - Improved transaction polling (2s interval, 120s timeout) with better error messages
+
+**Changed**
+- `frontend/src/lib/blockchain/wagmi.ts`:
+  - Standardized contract address environment variable names
+  - Improved MetaMask detection and prioritization (default over WalletConnect)
+  - Better connector configuration for Safari compatibility
+
+### 🎨 Frontend - UI & Pages
+
+**Added**
+- Error handling components:
+  - `frontend/src/app/error.tsx` - Error boundary component
+  - `frontend/src/app/global-error.tsx` - Global error handler
+  - `frontend/src/app/not-found.tsx` - 404 page
+
+**Changed**
+- `frontend/src/features/cleanup/pages/page.tsx`:
+  - Integrated actual contract calls (submitCleanup, attachRecyclablesToSubmission)
+  - Updated submission flow: After photos → Impact Report → Recyclables → Review/Success
+  - Added note about 5,000 cRECY token reserve with links to block explorer and Detrash Global
+  - Implemented success page with submission ID and auto-redirect
+  - Updated button labels for each step in the flow
+
+- `frontend/src/app/verifier/page.tsx`:
+  - Implemented signature-based authentication for access control
+  - Shows "Access Denied" for non-whitelisted addresses
+  - Displays complete submission details:
+    - Before/after photos with error handling and placeholders
+    - Submitter wallet address
+    - Impact report status badge
+    - Recyclables status badge
+    - Location coordinates
+    - Submission timestamps
+  - Fixed submission ID indexing (0-indexed instead of 1-indexed)
+  - Improved error messages with transaction hashes and block explorer links
+  - Fixed SSR issues with localStorage access
+
+- `frontend/src/app/page.tsx`:
+  - Removed VERIFIER stats section
+  - Updated LINKS section:
+    - Added WEBSITE (https://decleanup.net)
+    - Added TOKENOMICS (https://decleanup.net/tokenomics)
+    - Added FARCASTER (https://farcaster.xyz/decleanupnet)
+    - Added BUG REPORT link (Google Form)
+    - Updated LITEPAPER link to https://decleanup.net/litepaper
+  - Updated referral messages:
+    - Farcaster/X: Full message with @decleanupnet handle and referral link
+    - Copy: Just "DeCleanup Rewards" without handle
+
+### ⚙️ Frontend - Configuration & Infrastructure
+
+**Changed**
+- `frontend/next.config.mjs`:
+  - Removed unsupported `turbopack` option
+  - Added webpack alias to suppress MetaMask SDK async-storage warning
+
+- `frontend/src/app/api/ipfs/upload/route.ts`:
+  - Modified to accept both PINATA_SECRET_KEY and PINATA_SECRET_API_KEY
+  - Better error handling for missing API keys
+
+- `frontend/ENV_TEMPLATE.md`:
+  - Updated with new environment variable names
+  - Added instructions for Celo Sepolia deployment
+
+### 🐛 Fixed
+
+- Empty dataURI causing contract revert - now uses `ipfs://${beforeHash}`
+- Gas estimation failures - added explicit gas limit (1M) for createSubmission
+- Submission ID indexing error - fixed to use 0-indexed instead of 1-indexed
+- Missing custom error definitions in ABI - added all Submission contract errors
+- getCleanupDetails throwing on missing submissions - now returns default values gracefully
+- Transaction waiting issues - added polling configuration with timeout
+- Verifier dashboard showing no data - fixed to display all submission fields
+- MetaMask not opening in Safari - improved connector detection and prioritization
+- SSR errors with localStorage - added typeof window checks
+- Missing error components warning - created error.tsx, global-error.tsx, not-found.tsx
+
+### 📊 Statistics
+
+- Total files changed: 99 files
+- Lines added: ~6,354
+- Lines removed: ~1,194
+- Net change: +5,160 lines
+- New scripts created: 2
+- New frontend pages/components: 3
+
+### ✅ Key Achievements
+
+- ✅ Deployed RecyclablesReward contract on Celo Sepolia
+- ✅ Integrated full submission flow with contract calls
+- ✅ Implemented verifier dashboard with access control
+- ✅ Fixed multiple contract interaction bugs
+- ✅ Improved error handling and user feedback
+- ✅ Updated UI/UX based on user feedback
+- ✅ Standardized environment variable naming
+- ✅ Fixed MetaMask connector issues for Safari
+
+---
+
 ## [0.2.0] – 2025-12-02  
 🚀 Major Refactor: Unified Reward System
 
