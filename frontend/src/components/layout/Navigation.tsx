@@ -16,7 +16,6 @@ export function Navigation({ isVerifier = false }: NavigationProps) {
 
     const links = [
         { href: '/', label: 'Home' },
-        { href: '/profile', label: 'Profile' },
         ...(isVerifier ? [{ href: '/verifier', label: 'Verifier Cabinet' }] : []),
     ]
 

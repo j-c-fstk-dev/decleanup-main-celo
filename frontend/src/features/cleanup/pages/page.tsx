@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { FeeDisplay } from '@/components/ui/fee-display'
 import { BackButton } from '@/components/layout/BackButton'
-import { Camera, Upload, ArrowRight, Check, Loader2, ExternalLink, X, Clock, AlertCircle, Users, CheckCircle } from 'lucide-react'
+import { Camera, Upload, ArrowRight, ArrowLeft, Check, Loader2, ExternalLink, X, Clock, AlertCircle, Users, CheckCircle } from 'lucide-react'
 import { uploadToIPFS, uploadJSONToIPFS } from '@/lib/blockchain/ipfs'
 import { submitCleanup, getSubmissionFee, attachRecyclablesToSubmission } from '@/lib/blockchain/contracts'
 import { getCleanupDetails } from '@/lib/blockchain/contracts'
@@ -22,7 +22,7 @@ import {
   REQUIRED_CHAIN_IS_TESTNET,
 } from '@/lib/blockchain/wagmi'
 
-type Step = 'before' | 'after' | 'enhanced' | 'recyclables' | 'review'
+type Step = 'photos' | 'enhanced' | 'recyclables' | 'review'
 
 const NATIVE_SYMBOL = 'ETH'
 const BLOCK_EXPLORER_NAME = REQUIRED_BLOCK_EXPLORER_URL.includes('sepolia')
@@ -54,7 +54,7 @@ function CleanupContent() {
   const searchParams = useSearchParams()
   const [mounted, setMounted] = useState(false)
   const [referrerAddress, setReferrerAddress] = useState<Address | null>(null)
-  const [step, setStep] = useState<Step>('before')
+  const [step, setStep] = useState<Step>('photos')
   const [beforePhoto, setBeforePhoto] = useState<File | null>(null)
   const [afterPhoto, setAfterPhoto] = useState<File | null>(null)
   const [beforePhotoAllowed, setBeforePhotoAllowed] = useState(false)
@@ -271,16 +271,26 @@ function CleanupContent() {
                 return
               }
 
-              // Only set pending if it's actually pending (not verified and not rejected)
-              if (!status.verified) {
+              // Set pending cleanup state based on status
+              // If verified but not claimed, keep it in state so user can see claim button
+              if (status.verified && !status.claimed) {
+                // Verified but not claimed - keep in localStorage and state for claim button
                 setPendingCleanup({
                   id: BigInt(pendingCleanupId),
                   verified: status.verified,
                   claimed: status.claimed,
                 })
-              } else {
-                // If verified, clear localStorage
-                console.log('Cleanup is verified, clearing localStorage')
+                // Keep localStorage so claim button appears
+              } else if (!status.verified && !status.rejected) {
+                // Pending verification - keep in state
+                setPendingCleanup({
+                  id: BigInt(pendingCleanupId),
+                  verified: status.verified,
+                  claimed: status.claimed,
+                })
+              } else if (status.claimed || status.rejected) {
+                // Already claimed or rejected - clear localStorage
+                console.log('Cleanup is claimed or rejected, clearing localStorage')
                 localStorage.removeItem(pendingKey)
                 localStorage.removeItem(`pending_cleanup_location_${address.toLowerCase()}`)
                 setPendingCleanup(null)
@@ -335,6 +345,7 @@ function CleanupContent() {
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (file) {
+        // Validate file size (10 MB max)
         if (file.size > 10 * 1024 * 1024) {
           alert('Image size must be less than 10 MB')
           return
@@ -450,43 +461,102 @@ function CleanupContent() {
     }
   }
 
-  const handleBeforeNext = () => {
+  const handlePhotosNext = () => {
     if (!beforePhoto) {
       alert('Please upload a before photo')
       return
     }
-    if (!location) {
-      getLocation()
-      return
-    }
-    setStep('after')
-  }
-
-  const handleAfterNext = () => {
     if (!afterPhoto) {
       alert('Please upload an after photo')
       return
     }
-    // Go to enhanced form
+    if (!location) {
+      alert('Please capture or enter your location')
+      getLocation()
+      return
+    }
+    // Go to impact report form
     setStep('enhanced')
   }
 
-  const handleSkipEnhanced = async () => {
-    await submitCleanupFlow(false)
+  const handleSkipEnhanced = () => {
+    // Ensure hasImpactForm is false when skipping
+    setHasImpactForm(false)
+    // Go to recyclables step (don't submit yet)
+    setStep('recyclables')
+    console.log('Skipped impact report, navigating to recyclables step')
   }
 
-  const handleSubmitEnhanced = async () => {
+  // Check if impact form is valid (all required fields filled)
+  const isImpactFormValid = () => {
+    // Required fields: locationType and at least one wasteType
+    const hasLocationType = enhancedData.locationType && enhancedData.locationType.trim() !== ''
+    const hasWasteTypes = enhancedData.wasteTypes.length > 0
+    
+    // Check if any optional fields have values
+    const hasOptionalFields = 
+      enhancedData.area ||
+      enhancedData.weight ||
+      enhancedData.bags ||
+      enhancedData.hours ||
+      enhancedData.minutes ||
+      enhancedData.contributors.length > 0 ||
+      enhancedData.rightsAssignment ||
+      enhancedData.environmentalChallenges ||
+      enhancedData.preventionIdeas ||
+      enhancedData.additionalNotes
+    
+    // Form is valid if: all required fields are filled
+    const isValid = hasLocationType && hasWasteTypes
+    
+    // Form is partially filled if: some fields have values but not all required
+    const isPartiallyFilled = (hasLocationType || hasWasteTypes || hasOptionalFields) && !isValid
+    
+    // Form is completely empty
+    const isEmpty = !hasLocationType && !hasWasteTypes && !hasOptionalFields
+    
+    return { isValid, isPartiallyFilled, isEmpty }
+  }
+
+  const handleEnhancedNext = () => {
+    const validation = isImpactFormValid()
+    
+    // If form is completely empty, allow skip but show message
+    if (validation.isEmpty) {
+      alert('Please fill all required fields to submit the impact report:\n\n' +
+        '• Location Type (required)\n' +
+        '• At least one Waste Type (required)\n\n' +
+        'Or click "Skip" to skip the impact report entirely.')
+      return
+    }
+    
+    // If form is partially filled but not complete, show error and only allow skip
+    if (validation.isPartiallyFilled) {
+      alert(
+        '⚠️ All fields required for submission\n\n' +
+        'Click "Skip" to continue without the impact report.'
+      )
+      return
+    }
+    
+    // Only proceed if form is completely valid
+    if (!validation.isValid) {
+      return
+    }
+    
     setHasImpactForm(true)
-    // Go to recyclables step instead of submitting immediately
+    // Go to recyclables step
     setStep('recyclables')
   }
 
   const handleSkipRecyclables = async () => {
-    await submitCleanupFlow(true, false)
+    // hasForm could be true or false depending on whether user filled the impact form
+    await submitCleanupFlow(hasImpactForm, false)
   }
 
   const handleSubmitRecyclables = async () => {
-    await submitCleanupFlow(true, true)
+    // hasForm could be true or false depending on whether user filled the impact form
+    await submitCleanupFlow(hasImpactForm, true)
   }
 
   const submitCleanupFlow = async (hasForm: boolean, hasRecyclables: boolean = false) => {
@@ -497,7 +567,7 @@ function CleanupContent() {
 
     // Check if contracts are deployed
     if (!CONTRACT_ADDRESSES.VERIFICATION) {
-      alert('Contracts not deployed yet. Please deploy contracts first and set NEXT_PUBLIC_VERIFICATION_CONTRACT in .env.local')
+      alert('Contracts not deployed yet. Please deploy contracts first and set NEXT_PUBLIC_SUBMISSION_CONTRACT in .env.local')
       return
     }
 
@@ -632,24 +702,45 @@ function CleanupContent() {
         console.log('✅ Cleanup submitted with ID:', cleanupId.toString())
         console.log('✅ Referrer address used in submission:', referrerAddress || 'none (no referrer)')
         if (referrerAddress && referrerAddress !== '0x0000000000000000000000000000000000000000') {
-          console.log('✅ Referral reward will be distributed when cleanup is verified!')
+          console.log('✅ Referral reward will be distributed when cleanup is verified and user claims their first Impact Product level!')
         }
 
-        // Attach recyclables if provided (separate function call - can be easily removed)
-        if (hasRecyclables && recyclablesPhotoHash) {
+        // Attach recyclables to submission if provided
+        // Only attach if we have a recyclables photo hash (IPFS upload succeeded)
+        if (hasRecyclables && recyclablesPhotoHash && address) {
           try {
-            console.log('Attaching recyclables to submission...')
-            await attachRecyclablesToSubmission(
+            console.log('📝 Attaching recyclables to submission on-chain...')
+            console.log('Submission ID:', cleanupId.toString())
+            console.log('Recyclables photo hash:', recyclablesPhotoHash)
+            console.log('Recyclables receipt hash:', recyclablesReceiptHash || '(none)')
+            
+            // Call attachRecyclablesToSubmission to attach recyclables to the submission
+            const recyclablesTxHash = await attachRecyclablesToSubmission(
               cleanupId,
               recyclablesPhotoHash,
               recyclablesReceiptHash || ''
             )
-            console.log('✅ Recyclables attached successfully!')
+            
+            console.log('✅ Recyclables attached successfully! Transaction hash:', recyclablesTxHash)
+            console.log('✅ Recyclables will be rewarded when cleanup is verified')
           } catch (recyclablesError: any) {
             console.error('Error attaching recyclables (non-fatal):', recyclablesError)
             // Don't fail the entire submission if recyclables attachment fails
-            // The main cleanup submission was successful
+            // Show a warning but continue with the submission
+            const errorMsg = recyclablesError?.message || recyclablesError?.shortMessage || 'Unknown error'
+            console.warn('⚠️ Recyclables attachment failed:', errorMsg)
+            // Only show alert if it's not a network/RPC error (those are expected sometimes)
+            if (!errorMsg.includes('Internal JSON-RPC error') && !errorMsg.includes('network')) {
+              alert(
+                `⚠️ Warning: Cleanup submitted successfully, but failed to attach recyclables.\n\n` +
+                `Submission ID: ${cleanupId.toString()}\n\n` +
+                `You can try attaching recyclables later, or contact support if needed.\n\n` +
+                `Error: ${errorMsg}`
+              )
+            }
           }
+        } else if (hasRecyclables && !recyclablesPhotoHash) {
+          console.warn('⚠️ Recyclables were selected but IPFS upload failed - recyclables not attached to submission')
         }
 
         setCleanupId(cleanupId)
@@ -669,6 +760,23 @@ function CleanupContent() {
           // Also clear old global keys if they exist
           localStorage.removeItem('pending_cleanup_id')
           localStorage.removeItem('pending_cleanup_location')
+        }
+
+        // Immediately update pendingCleanup state to lock the submit button
+        // This ensures the UI reflects the pending status right away
+        if (address) {
+          console.log('[Cleanup] Setting pendingCleanup state after submission:', {
+            cleanupId: cleanupId.toString(),
+            verified: false,
+            claimed: false,
+          })
+          setPendingCleanup({
+            id: cleanupId,
+            verified: false,
+            claimed: false,
+          })
+          // Verify state was set
+          console.log('[Cleanup] Pending cleanup state should now lock submit button')
         }
 
         // Show success message and redirect to review step
@@ -723,7 +831,7 @@ function CleanupContent() {
             `   • Network Name: ${REQUIRED_CHAIN_NAME}\n` +
             `   • RPC URL: ${REQUIRED_RPC_URL}\n` +
             `   • Chain ID: ${REQUIRED_CHAIN_ID}\n` +
-            `   • Currency Symbol: ETH\n` +
+            `   • Currency Symbol: CELO\n` +
             `   • Block Explorer: ${REQUIRED_BLOCK_EXPLORER_URL}\n` +
             `5. Once on ${REQUIRED_CHAIN_NAME}, try submitting again.\n\n` +
             `⚠️ Do NOT submit transactions on Celo - they will fail!`
@@ -744,7 +852,7 @@ function CleanupContent() {
             `   • Network Name: ${REQUIRED_CHAIN_NAME}\n` +
             `   • RPC URL: ${REQUIRED_RPC_URL}\n` +
             `   • Chain ID: ${REQUIRED_CHAIN_ID}\n` +
-            `   • Currency Symbol: ETH\n` +
+            `   • Currency Symbol: CELO\n` +
             `   • Block Explorer: ${REQUIRED_BLOCK_EXPLORER_URL}\n` +
             `5. Click "Save" and switch to ${REQUIRED_CHAIN_NAME}\n` +
             `${REQUIRED_CHAIN_IS_TESTNET ? `6. Get testnet CELO from: https://faucet.celo.org/\n` : ''}` +
@@ -762,7 +870,7 @@ function CleanupContent() {
             `   • Network Name: ${REQUIRED_CHAIN_NAME}\n` +
             `   • RPC URL: ${REQUIRED_RPC_URL}\n` +
             `   • Chain ID: ${REQUIRED_CHAIN_ID}\n` +
-            `   • Currency Symbol: ETH\n` +
+            `   • Currency Symbol: CELO\n` +
             `   • Block Explorer: ${REQUIRED_BLOCK_EXPLORER_URL}\n` +
             `5. Once on ${REQUIRED_CHAIN_NAME}, try submitting again.\n\n` +
             `Current error: ${errorMessage}`
@@ -814,10 +922,10 @@ function CleanupContent() {
           `   • Network Name: ${REQUIRED_CHAIN_NAME}\n` +
           `   • RPC URL: ${REQUIRED_RPC_URL}\n` +
           `   • Chain ID: ${REQUIRED_CHAIN_ID}\n` +
-          `   • Currency Symbol: ETH\n` +
+          `   • Currency Symbol: CELO\n` +
           `   • Block Explorer: ${REQUIRED_BLOCK_EXPLORER_URL}\n` +
           `5. Click "Save" and switch to ${REQUIRED_CHAIN_NAME}\n` +
-          `${REQUIRED_CHAIN_IS_TESTNET ? `6. Get testnet ETH from: https://www.coinbase.com/faucets/base-ethereum-goerli-faucet\n` : ''}` +
+          `${REQUIRED_CHAIN_IS_TESTNET ? `6. Get testnet CELO from: https://faucet.celo.org/\n` : ''}` +
           `${REQUIRED_CHAIN_IS_TESTNET ? `7. Then try submitting again.` : `6. Then try submitting again.`}`
         )
       } else if (isSwitchError) {
@@ -832,7 +940,7 @@ function CleanupContent() {
           `   • Network Name: ${REQUIRED_CHAIN_NAME}\n` +
           `   • RPC URL: ${REQUIRED_RPC_URL}\n` +
           `   • Chain ID: ${REQUIRED_CHAIN_ID}\n` +
-          `   • Currency Symbol: ETH\n` +
+          `   • Currency Symbol: CELO\n` +
           `   • Block Explorer: ${REQUIRED_BLOCK_EXPLORER_URL}\n` +
           `5. Once on ${REQUIRED_CHAIN_NAME}, try submitting again.\n\n` +
           `Current error: ${errorMessage}`
@@ -843,7 +951,7 @@ function CleanupContent() {
           `Please check:\n` +
           `- Your wallet is connected\n` +
           `- You're on ${REQUIRED_CHAIN_NAME} (Chain ID: ${REQUIRED_CHAIN_ID})\n` +
-          `- You have enough ETH for gas\n` +
+          `- You have enough CELO for gas\n` +
           `- The contract address is correct`
         )
       }
@@ -854,7 +962,19 @@ function CleanupContent() {
 
   // Check if submission is disabled due to pending cleanup or wrong network
   const isWrongNetwork = chainId !== REQUIRED_CHAIN_ID
-  const isSubmissionDisabled = (pendingCleanup && !pendingCleanup.verified) || isWrongNetwork || isSwitchingChain
+  // IMPORTANT: Check for null/undefined explicitly, not truthiness, because cleanup ID 0 is valid!
+  const hasPendingCleanup = pendingCleanup !== null && pendingCleanup !== undefined
+  const isSubmissionDisabled = (hasPendingCleanup && !pendingCleanup.verified) || isWrongNetwork || isSwitchingChain
+  
+  // Debug logging
+  if (hasPendingCleanup) {
+    console.log('[Cleanup] Submission disabled check:', {
+      hasPendingCleanup,
+      pendingCleanupId: pendingCleanup.id.toString(),
+      verified: pendingCleanup.verified,
+      isSubmissionDisabled,
+    })
+  }
 
   // Referral Notification Component (defined early so it's always in scope)
   const ReferralNotification = () => {
@@ -871,7 +991,7 @@ function CleanupContent() {
               🎉 You Were Invited!
             </h3>
             <p className="text-sm text-gray-300">
-              You've been referred to DeCleanup Rewards! When you submit your first cleanup and it gets verified, both you and your referrer will earn <strong className="text-white">3 cDCU</strong> each.
+              You've been referred to DeCleanup Rewards! When you submit your first cleanup, get it verified, and claim your first Impact Product level, both you and your referrer will earn <strong className="text-white">3 $cDCU</strong> each.
             </p>
             <p className="mt-2 text-xs text-gray-400">
               Submit a cleanup below to get started and claim your referral reward!
@@ -1061,8 +1181,8 @@ function CleanupContent() {
     return null
   }
 
-  // Step 1: Before Photo
-  if (step === 'before') {
+  // Step 1: Photos (Before + After) + Location
+  if (step === 'photos') {
     return (
       <div className="min-h-screen bg-background px-4 py-6 sm:py-8 pb-20">
         <div className="mx-auto max-w-md">
@@ -1075,140 +1195,190 @@ function CleanupContent() {
 
           <div className="mb-6 text-center">
             <h1 className="mb-2 text-3xl font-bold uppercase tracking-wide text-white sm:text-4xl">
-              Upload Before Photo
+              Submit Cleanup Photos
             </h1>
             <p className="text-sm text-gray-400">
               Upload before and after cleanup photos with geotag. Supported formats: JPEG, JPG, HEIC. Maximum size per image: 10 MB.
             </p>
           </div>
 
-          <div className="mb-6">
-            <p className="mb-4 text-sm font-medium text-gray-300">
-              Step 1: Snap a photo of the area before you start. Show the impact your cleanup will make!
-            </p>
-
-            {beforePhoto ? (
-              <div className="relative mb-4">
-                <img
-                  src={URL.createObjectURL(beforePhoto)}
-                  alt="Before cleanup"
-                  className="h-64 w-full rounded-lg object-cover"
-                />
+          <div className="mb-6 space-y-6">
+            {/* Before Photo */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">
+                Before Photo *
+              </label>
+              {beforePhoto ? (
+                <div className="relative mb-2">
+                  <img
+                    src={URL.createObjectURL(beforePhoto)}
+                    alt="Before cleanup"
+                    className="h-48 w-full rounded-lg object-cover"
+                  />
+                  <button
+                    onClick={() => setBeforePhoto(null)}
+                    disabled={isSubmissionDisabled}
+                    className="absolute right-2 top-2 rounded-full bg-red-500 p-2 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
                 <button
-                  onClick={() => setBeforePhoto(null)}
+                  onClick={() => handlePhotoSelect('before')}
                   disabled={isSubmissionDisabled}
-                  className="absolute right-2 top-2 rounded-full bg-red-500 p-2 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex h-48 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-700 bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed hover:border-gray-600"
                 >
-                  <X className="h-4 w-4" />
+                  <Upload className={`mb-2 h-10 w-10 ${isSubmissionDisabled ? 'text-gray-600' : 'text-gray-500'}`} />
+                  <p className={`text-sm ${isSubmissionDisabled ? 'text-gray-600' : 'text-gray-400'}`}>
+                    {isSubmissionDisabled ? 'Submission on cooldown' : isMobile ? 'Tap to take photo or choose from gallery' : 'Click to upload photo'}
+                  </p>
+                  {isMobile && (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                      <Camera className="h-4 w-4" />
+                      <span>Camera or Gallery</span>
+                    </div>
+                  )}
                 </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => handlePhotoSelect('before')}
-                disabled={isSubmissionDisabled}
-                className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-700 bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed hover:border-gray-600"
-              >
-                <Upload className={`mb-2 h-12 w-12 ${isSubmissionDisabled ? 'text-gray-600' : 'text-gray-500'}`} />
-                <p className={`text-sm ${isSubmissionDisabled ? 'text-gray-600' : 'text-gray-400'}`}>
-                  {isSubmissionDisabled ? 'Submission on cooldown' : isMobile ? 'Tap to take photo or choose from gallery' : 'Click to upload photo'}
-                </p>
-                {isMobile && (
-                  <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                    <Camera className="h-4 w-4" />
-                    <span>Camera or Gallery</span>
-                  </div>
-                )}
-              </button>
-            )}
+              )}
+              <label className="mt-2 flex items-center gap-2 text-xs text-gray-400">
+                <input
+                  type="checkbox"
+                  checked={beforePhotoAllowed}
+                  onChange={(e) => setBeforePhotoAllowed(e.target.checked)}
+                  className="rounded border-gray-700 bg-gray-800"
+                />
+                Allow us to post this picture on social platforms (X, Telegram)
+              </label>
+            </div>
 
-            <label className="mt-4 flex items-center gap-2 text-sm text-gray-400">
-              <input
-                type="checkbox"
-                checked={beforePhotoAllowed}
-                onChange={(e) => setBeforePhotoAllowed(e.target.checked)}
-                className="rounded border-gray-700 bg-gray-800"
-              />
-              Agree if you allow us to post this picture on social platforms (X, Telegram)
-            </label>
-          </div>
-
-          {/* Location Status */}
-          <div className="mb-4 rounded-lg border border-gray-800 bg-gray-900 p-3">
-            {isGettingLocation ? (
-              <div className="flex items-center gap-2 text-sm text-gray-400">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Getting location...
-              </div>
-            ) : location ? (
-              <div className="flex items-center gap-2 text-sm text-brand-green">
-                <Check className="h-4 w-4" />
-                Location captured: {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <span className="text-sm text-gray-400">Location not captured</span>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            {/* After Photo */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">
+                After Photo *
+              </label>
+              {afterPhoto ? (
+                <div className="relative mb-2">
+                  <img
+                    src={URL.createObjectURL(afterPhoto)}
+                    alt="After cleanup"
+                    className="h-48 w-full rounded-lg object-cover"
+                  />
                   <button
-                    onClick={getLocation}
-                    className="text-sm text-brand-green hover:text-[#4a9a26]"
+                    onClick={() => setAfterPhoto(null)}
+                    disabled={isSubmissionDisabled}
+                    className="absolute right-2 top-2 rounded-full bg-red-500 p-2 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Get Location
-                  </button>
-                  <button
-                    onClick={() => setManualLocationMode(true)}
-                    className="text-xs text-gray-400 underline-offset-2 hover:text-gray-200"
-                  >
-                    Enter manually
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
-              </div>
-            )}
-            {locationError && (
-              <div className="mt-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs text-yellow-200">
-                {locationError}
-                {isBaseBuildHost && (
-                  {/* Location prompt info - removed Base Build specific message for Celo deployment */}
-                )}
-              </div>
-            )}
-            {manualLocationMode && (
-              <div className="mt-3 space-y-3 rounded-lg border border-gray-800 bg-gray-950 p-3">
-                <p className="text-xs text-gray-400">
-                  Paste coordinates (e.g. 37.7749, -122.4194) from Google Maps. We'll store them locally for this session.
-                </p>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <input
-                    type="number"
-                    value={manualLatInput}
-                    onChange={(e) => setManualLatInput(e.target.value)}
-                    placeholder="Latitude"
-                    className="flex-1 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-500"
-                    step="0.000001"
-                  />
-                  <input
-                    type="number"
-                    value={manualLngInput}
-                    onChange={(e) => setManualLngInput(e.target.value)}
-                    placeholder="Longitude"
-                    className="flex-1 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-500"
-                    step="0.000001"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleManualLocationApply}
-                  className="w-full bg-brand-green text-black hover:bg-[#4a9a26]"
+              ) : (
+                <button
+                  onClick={() => handlePhotoSelect('after')}
+                  disabled={isSubmissionDisabled}
+                  className="flex h-48 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-700 bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed hover:border-gray-600"
                 >
-                  Save Manual Location
-                </Button>
-              </div>
-            )}
+                  <Upload className={`mb-2 h-10 w-10 ${isSubmissionDisabled ? 'text-gray-600' : 'text-gray-500'}`} />
+                  <p className={`text-sm ${isSubmissionDisabled ? 'text-gray-600' : 'text-gray-400'}`}>
+                    {isSubmissionDisabled ? 'Submission on cooldown' : isMobile ? 'Tap to take photo or choose from gallery' : 'Click to upload photo'}
+                  </p>
+                  {isMobile && (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                      <Camera className="h-4 w-4" />
+                      <span>Camera or Gallery</span>
+                    </div>
+                  )}
+                </button>
+              )}
+              <label className="mt-2 flex items-center gap-2 text-xs text-gray-400">
+                <input
+                  type="checkbox"
+                  checked={afterPhotoAllowed}
+                  onChange={(e) => setAfterPhotoAllowed(e.target.checked)}
+                  className="rounded border-gray-700 bg-gray-800"
+                />
+                Allow us to post this picture on social platforms (X, Telegram)
+              </label>
+            </div>
+
+            {/* Location Status */}
+            <div className="rounded-lg border border-gray-800 bg-gray-900 p-3">
+              <label className="mb-2 block text-sm font-medium text-gray-300">
+                Location *
+              </label>
+              {isGettingLocation ? (
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Getting location...
+                </div>
+              ) : location ? (
+                <div className="flex items-center gap-2 text-sm text-brand-green">
+                  <Check className="h-4 w-4" />
+                  Location captured: {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-sm text-gray-400">Location not captured</span>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                    <button
+                      onClick={getLocation}
+                      className="text-sm text-brand-green hover:text-[#4a9a26]"
+                    >
+                      Get Location
+                    </button>
+                    <button
+                      onClick={() => setManualLocationMode(true)}
+                      className="text-xs text-gray-400 underline-offset-2 hover:text-gray-200"
+                    >
+                      Enter manually
+                    </button>
+                  </div>
+                </div>
+              )}
+              {locationError && (
+                <div className="mt-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs text-yellow-200">
+                  {locationError}
+                </div>
+              )}
+              {manualLocationMode && (
+                <div className="mt-3 space-y-3 rounded-lg border border-gray-800 bg-gray-950 p-3">
+                  <p className="text-xs text-gray-400">
+                    Paste coordinates (e.g. 37.7749, -122.4194) from Google Maps. We'll store them locally for this session.
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      type="number"
+                      value={manualLatInput}
+                      onChange={(e) => setManualLatInput(e.target.value)}
+                      placeholder="Latitude"
+                      className="flex-1 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-500"
+                      step="0.000001"
+                    />
+                    <input
+                      type="number"
+                      value={manualLngInput}
+                      onChange={(e) => setManualLngInput(e.target.value)}
+                      placeholder="Longitude"
+                      className="flex-1 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-500"
+                      step="0.000001"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleManualLocationApply}
+                    className="w-full bg-brand-green text-black hover:bg-[#4a9a26]"
+                  >
+                    Save Manual Location
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
 
           <Button
-            onClick={handleBeforeNext}
-            disabled={!beforePhoto || isSubmitting || isGettingLocation}
+            onClick={handlePhotosNext}
+            disabled={!beforePhoto || !afterPhoto || !location || isSubmitting || isGettingLocation || isSubmissionDisabled}
             className="w-full gap-2 bg-brand-green text-black hover:bg-[#4a9a26]"
           >
             {isSubmitting ? (
@@ -1218,104 +1388,11 @@ function CleanupContent() {
               </>
             ) : (
               <>
-                Save and Next
+                Next
                 <ArrowRight className="h-4 w-4" />
               </>
             )}
           </Button>
-        </div>
-      </div>
-    )
-  }
-
-  // Step 2: After Photo
-  if (step === 'after') {
-    return (
-      <div className="min-h-screen bg-background px-4 py-6 sm:py-8 pb-20">
-        <div className="mx-auto max-w-md">
-          <div className="mb-6">
-            <BackButton />
-          </div>
-
-          <ReferralNotification />
-
-          <div className="mb-6 text-center">
-            <h1 className="mb-2 text-3xl font-bold uppercase tracking-wide text-white sm:text-4xl">
-              Upload After Photo
-            </h1>
-            <p className="text-sm text-gray-400">
-              Upload before and after cleanup photos with geotag. Supported formats: JPEG, JPG, HEIC. Maximum size per image: 10 MB.
-            </p>
-          </div>
-
-          <div className="mb-6">
-            <p className="mb-4 text-sm font-medium text-gray-300">
-              Step 2: Capture the transformed space! Upload your after photo to complete your submission and earn rewards.
-            </p>
-
-            {afterPhoto ? (
-              <div className="relative mb-4">
-                <img
-                  src={URL.createObjectURL(afterPhoto)}
-                  alt="After cleanup"
-                  className="h-64 w-full rounded-lg object-cover"
-                />
-                <button
-                  onClick={() => setAfterPhoto(null)}
-                  className="absolute right-2 top-2 rounded-full bg-red-500 p-2 text-white"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => handlePhotoSelect('after')}
-                className="flex h-64 w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-700 bg-gray-900 hover:border-gray-600"
-              >
-                <Upload className="mb-2 h-12 w-12 text-gray-500" />
-                <p className="text-sm text-gray-400">
-                  {isMobile ? 'Tap to take photo or choose from gallery' : 'Click to upload photo'}
-                </p>
-                {isMobile && (
-                  <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                    <Camera className="h-4 w-4" />
-                    <span>Camera or Gallery</span>
-                  </div>
-                )}
-              </button>
-            )}
-
-            <label className="mt-4 flex items-center gap-2 text-sm text-gray-400">
-              <input
-                type="checkbox"
-                checked={afterPhotoAllowed}
-                onChange={(e) => setAfterPhotoAllowed(e.target.checked)}
-                className="rounded border-gray-700 bg-gray-800"
-              />
-              Agree if you allow us to post this picture on social platforms (X, Telegram)
-            </label>
-          </div>
-
-          <div className="flex gap-4">
-            <BackButton />
-            <Button
-              onClick={handleAfterNext}
-              disabled={!afterPhoto || isSubmitting}
-              className="flex-1 gap-2 bg-brand-green text-black hover:bg-[#4a9a26]"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  Save and Next
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </Button>
-          </div>
         </div>
       </div>
     )
@@ -1338,15 +1415,24 @@ function CleanupContent() {
               Impact Report
             </h1>
             <p className="mb-2 text-sm font-medium text-brand-yellow">
-              +5 cDCU Points Bonus
+              +5 $cDCU Points Bonus
             </p>
             <p className="text-sm text-gray-400">
-              Provide more details on your cleanup (optional, rewarded with 5 cDCU Points).
+              Provide more details on your cleanup (optional, rewarded with 5 $cDCU Points).
             </p>
           </div>
 
           {/* Full form (always visible) */}
-          <div className="mb-6 space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+          <div 
+            className="mb-6 space-y-4 max-h-[70vh] overflow-y-auto pr-2"
+            onWheel={(e) => {
+              // Close any open select dropdowns when scrolling
+              const activeElement = document.activeElement
+              if (activeElement && activeElement.tagName === 'SELECT' && activeElement instanceof HTMLElement) {
+                activeElement.blur()
+              }
+            }}
+          >
             {/* Location Type */}
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-300">
@@ -1355,6 +1441,25 @@ function CleanupContent() {
               <select
                 value={enhancedData.locationType}
                 onChange={(e) => setEnhancedData({ ...enhancedData, locationType: e.target.value })}
+                onBlur={(e) => e.currentTarget.blur()}
+                onWheel={(e) => {
+                  // Prevent scroll from changing select value
+                  if (document.activeElement === e.currentTarget) {
+                    e.currentTarget.blur()
+                  }
+                }}
+                onMouseDown={(e) => {
+                  // Prevent select from interfering with page scroll
+                  if (e.button === 0) {
+                    // Only handle left click
+                    const select = e.currentTarget as HTMLSelectElement
+                    setTimeout(() => {
+                      if (document.activeElement !== select) {
+                        select.blur()
+                      }
+                    }, 0)
+                  }
+                }}
                 className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
                 required
               >
@@ -1385,6 +1490,13 @@ function CleanupContent() {
                 <select
                   value={enhancedData.areaUnit}
                   onChange={(e) => setEnhancedData({ ...enhancedData, areaUnit: e.target.value as 'sqm' | 'sqft' })}
+                  onBlur={(e) => e.currentTarget.blur()}
+                  onWheel={(e) => {
+                    // Prevent scroll from changing select value
+                    if (document.activeElement === e.currentTarget) {
+                      e.currentTarget.blur()
+                    }
+                  }}
                   className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
                 >
                   <option value="sqm">m²</option>
@@ -1411,6 +1523,13 @@ function CleanupContent() {
                 <select
                   value={enhancedData.weightUnit}
                   onChange={(e) => setEnhancedData({ ...enhancedData, weightUnit: e.target.value as 'kg' | 'lbs' })}
+                  onBlur={(e) => e.currentTarget.blur()}
+                  onWheel={(e) => {
+                    // Prevent scroll from changing select value
+                    if (document.activeElement === e.currentTarget) {
+                      e.currentTarget.blur()
+                    }
+                  }}
                   className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
                 >
                   <option value="kg">kg</option>
@@ -1554,6 +1673,13 @@ function CleanupContent() {
               <select
                 value={enhancedData.rightsAssignment}
                 onChange={(e) => setEnhancedData({ ...enhancedData, rightsAssignment: e.target.value as any })}
+                onBlur={(e) => e.currentTarget.blur()}
+                onWheel={(e) => {
+                  // Prevent scroll from changing select value
+                  if (document.activeElement === e.currentTarget) {
+                    e.currentTarget.blur()
+                  }
+                }}
                 className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
               >
                 <option value="">Select license</option>
@@ -1652,6 +1778,29 @@ function CleanupContent() {
             />
           )}
 
+          {/* Validation warning for partially filled form */}
+          {(() => {
+            const validation = isImpactFormValid()
+            if (validation.isPartiallyFilled) {
+              return (
+                <div className="mb-4 rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-5 w-5 flex-shrink-0 text-yellow-400 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-yellow-400 mb-1">
+                        All fields required for submission
+                      </p>
+                      <p className="text-xs text-gray-400 mt-2">
+                        Click "Skip" to continue without the impact report.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
+            }
+            return null
+          })()}
+
           <div className="flex gap-4">
             <Button
               variant="outline"
@@ -1662,9 +1811,14 @@ function CleanupContent() {
               Skip
             </Button>
             <Button
-              onClick={handleSubmitEnhanced}
-              disabled={isSubmitting}
-              className="flex-1 gap-2 bg-brand-yellow text-black hover:bg-[#e6e600]"
+              onClick={handleEnhancedNext}
+              disabled={(() => {
+                if (isSubmitting) return true
+                const validation = isImpactFormValid()
+                // Disable if partially filled (can only skip, not submit)
+                return validation.isPartiallyFilled === true
+              })()}
+              className="flex-1 gap-2 bg-brand-yellow text-black hover:bg-[#e6e600] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
                 <>
@@ -1673,7 +1827,7 @@ function CleanupContent() {
                 </>
               ) : (
                 <>
-                  Submit and Next
+                  Next
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
@@ -1690,58 +1844,88 @@ function CleanupContent() {
       <div className="min-h-screen bg-background px-4 py-6 sm:py-8 pb-20">
         <div className="mx-auto max-w-md">
           <div className="mb-6">
-            <BackButton />
+            <Button
+              variant="outline"
+              onClick={() => setStep('enhanced')}
+              className="gap-2 border-2 border-gray-700 bg-black text-white hover:bg-gray-900"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
           </div>
 
           <ReferralNotification />
 
           <div className="mb-6 text-center">
             <h1 className="mb-2 text-3xl font-bold uppercase tracking-wide text-white sm:text-4xl">
-              Recyclables Report
+              Recyclables Submission
             </h1>
             <p className="mb-2 text-sm font-medium text-brand-green">
-              Optional - Earn cRECY tokens
+              Optional - Earn $cRECY tokens
             </p>
             <p className="text-sm text-gray-400">
               If you recycled any materials from your cleanup, upload proof to earn additional rewards.
             </p>
           </div>
 
+          {/* Mainnet Notice */}
+          <div className="mb-6 rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 flex-shrink-0 text-yellow-400 mt-0.5" />
+              <div className="flex-1">
+                <p className="mb-2 text-sm font-medium text-yellow-400">
+                  ⚠️ Testing Stage - Mainnet Coming Soon
+                </p>
+                <p className="text-xs text-gray-300">
+                  Recyclables submissions are currently in <strong>testing stage</strong>. 
+                  The full $cRECY token rewards system will be activated when contracts launch on{' '}
+                  <strong>Celo Mainnet</strong>. You can still submit recyclables data now for testing purposes, 
+                  but rewards will be distributed after mainnet deployment.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* cRECY Reserve Note */}
           <div className="mb-6 rounded-lg border border-brand-green/50 bg-brand-green/10 p-4">
             <p className="mb-2 text-sm font-medium text-brand-green">
-              💰 5,000 cRECY Token Reserve Available
+              💰 5,000 $cRECY Token Reserve Available (Mainnet)
             </p>
-            <p className="mb-3 text-xs text-gray-300">
-              In partnership with{' '}
+            <p className="mb-2 text-xs text-gray-300">
+              <strong>What is this?</strong> $cRECY tokens are rewards for recycling materials from your cleanup. 
+              This program is in partnership with{' '}
               <a
-                href="https://detrash.global"
+                href="https://www.detrashtoken.com/en"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-brand-green hover:underline font-semibold"
               >
-                Detrash Global
+                Detrash
               </a>
-              , we have a reserve of 5,000 cRECY tokens for recycling rewards.
+              .
+            </p>
+            <p className="mb-3 text-xs text-gray-300">
+              We have a reserve of <strong>5,000 $cRECY tokens</strong> available for recycling rewards on Celo Mainnet. 
+              This promotional program will continue until the reserve is depleted.
             </p>
             <div className="flex flex-wrap gap-2 text-xs">
               <a
-                href={`${REQUIRED_BLOCK_EXPLORER_URL}/token/0x34C11A932853Ae24E845Ad4B633E3cEf91afE583`}
+                href="https://celoscan.io/token/0x34C11A932853Ae24E845Ad4B633E3cEf91afE583"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-brand-green hover:underline flex items-center gap-1"
               >
-                View cRECY on {BLOCK_EXPLORER_NAME}
+                View $cRECY on CeloScan (Mainnet)
                 <ExternalLink className="h-3 w-3" />
               </a>
               <span className="text-gray-500">•</span>
               <a
-                href="https://detrash.global"
+                href="https://www.detrashtoken.com/en"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-brand-green hover:underline flex items-center gap-1"
               >
-                Detrash Global
+                Learn more about Detrash
                 <ExternalLink className="h-3 w-3" />
               </a>
             </div>
@@ -1885,7 +2069,7 @@ function CleanupContent() {
             <p className="text-sm text-gray-400">
               Your cleanup has been submitted successfully and is now pending verification. 
               Usually the process takes from 2 to 12 hours. 
-              You'll be able to claim your rewards once it's verified.
+              You'll be able to claim your rewards when you claim your Impact Product level after verification.
             </p>
           </div>
 
@@ -1914,7 +2098,7 @@ function CleanupContent() {
             <p className="mb-2 text-sm font-semibold text-brand-green">What's Next?</p>
             <ul className="space-y-1 text-xs text-gray-300 list-disc list-inside">
               <li>Your submission is being reviewed by our verifiers</li>
-              <li>You'll receive rewards once verified (usually 2-12 hours)</li>
+              <li>After verification, claim your Impact Product level to receive rewards (usually 2-12 hours)</li>
               <li>Check your profile to see submission status</li>
               <li>Contact us in Telegram if you have questions</li>
             </ul>

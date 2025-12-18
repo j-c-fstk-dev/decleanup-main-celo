@@ -33,11 +33,6 @@ export function Footer() {
                                     Submit Cleanup
                                 </Link>
                             </li>
-                            <li>
-                                <Link href="/profile" className="text-muted-foreground hover:text-brand-green transition-colors">
-                                    My Profile
-                                </Link>
-                            </li>
                         </ul>
                     </div>
 

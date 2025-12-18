@@ -162,7 +162,7 @@ contract DCURewardManager is Ownable, ReentrancyGuard {
 
     // ----------- Verification & Mint Status -----------
 
-    function setPoiVerificationStatus(address user, bool status) external onlyOwner {
+    function setPoiVerificationStatus(address user, bool status) external onlyNftOrOwner {
         require(user != address(0), "REWARD__InvalidAddress");
 
         if (status) {
@@ -224,7 +224,7 @@ contract DCURewardManager is Ownable, ReentrancyGuard {
 
     // ----------- Reward Accrual -----------
 
-    function rewardImpactProductClaim(address user, uint256 level) external onlyOwner {
+    function rewardImpactProductClaim(address user, uint256 level) external onlyNftOrOwner {
         _requireValidLevel(level);
         require(user != address(0), "REWARD__InvalidAddress");
         require(_isRewardEligible(user), "User not eligible for rewards");

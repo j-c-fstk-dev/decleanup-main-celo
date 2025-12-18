@@ -1,11 +1,13 @@
 {
-  "DCUToken": "0x3d5b9A91c4dA09097E565202FCaDfF6A006eA9Fd",
-  "RewardLogic": "0x8e6E38DA075afe91E46d99D64fc8347D9C8826fB",
-  "DCUAccounting": "0xCC8cB764fc3084719468e314BaeeC12bb2689EC6",
-  "DCUStorage": "0x026d43f024a271Fa82E10F0F83a8D80189712F89",
-  "DCURewardManager": "0xE3A86A05a489f832bC584744DDf102cAE7ACD5dF",
-  "ImpactProductNFT": "0xF954E197Dc3a8F950b440f940c871873453A6E72",
-  "network": "arbitrum-sepolia",
-  "chainId": 421614,
-  "deployedAt": "2025-04-22T01:39:41.362Z"
+  "DCUToken": "0xa282c26245d116aB5600fBF7901f2E4827c16B7A",
+  "DCURewardManager": "0x11959b8cd861cd6ad52f6101d2e802b1b2841e55",
+  "Submission": "0x731fa6e82d528e565f7a46f36ec1f47b455eb822",
+  "ImpactProductNFT": "0x13748fcc6849b2390d3897e57f34df9b842dbfb0",
+  "RecyclablesReward": "0xf8f9db39f83ea40d4f9aca72cdbec74b8f5a2900",
+  "cRecyToken": "0x34C11A932853Ae24E845Ad4B633E3cEf91afE583",
+  "network": "celo-sepolia",
+  "chainId": 11142220,
+  "deployedAt": "2025-12-17T00:00:00.000Z",
+  "note": "DCURewardManager and ImpactProductNFT redeployed with complete claim flow - automatic level/referral/streak reward distribution",
+  "updatedAt": "2025-12-18T04:39:33.057Z"
 }

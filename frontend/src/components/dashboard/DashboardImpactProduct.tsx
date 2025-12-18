@@ -125,7 +125,7 @@ export function DashboardImpactProduct({
                             <p className="text-[10px] text-brand-yellow mt-0.5">{levelName}</p>
                         </div>
                         <div className="rounded-lg border border-brand-green/20 bg-black/50 p-2">
-                            <p className="mb-1 text-xs text-gray-400">cDCU Attached</p>
+                            <p className="mb-1 text-xs text-gray-400">$cDCU Attached</p>
                             <p className="font-bebas text-2xl text-brand-green">{dcuAttached}</p>
                         </div>
                     </div>

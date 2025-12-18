@@ -40,18 +40,35 @@ export function DashboardActions({
     }
 
     const handleShareX = () => {
-        const text = encodeURIComponent(`Join me on DeCleanup Network! Clean up, earn cDCU tokens, and make a real environmental impact. 🌱`)
+        const text = encodeURIComponent(`Join me on DeCleanup Network! Clean up, earn $cDCU tokens, and make a real environmental impact. 🌱`)
         const url = encodeURIComponent(referralLink)
         window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank')
     }
 
     const handleShareFarcaster = () => {
-        const text = encodeURIComponent(`Join me on DeCleanup Network! Clean up, earn cDCU tokens, and make a real environmental impact. 🌱\n\n${referralLink}`)
+        const text = encodeURIComponent(`Join me on DeCleanup Network! Clean up, earn $cDCU tokens, and make a real environmental impact. 🌱\n\n${referralLink}`)
         window.open(`https://warpcast.com/~/compose?text=${text}`, '_blank')
     }
 
+    // Button state logic:
+    // 1. Can submit: no pending cleanup, cannot claim → Submit active, Claim hidden
+    // 2. Under verification: has pending cleanup, cannot claim → Both hidden, show status
+    // 3. Verified: has pending cleanup, can claim → Claim active, Submit hidden
     const canSubmit = !cleanupStatus?.hasPendingCleanup && !cleanupStatus?.canClaim
     const canClaimLevel = cleanupStatus?.canClaim && !isClaiming
+    const isUnderVerification = cleanupStatus?.hasPendingCleanup && !cleanupStatus?.canClaim
+    
+    // Debug logging
+    if (cleanupStatus?.canClaim) {
+      console.log('[DashboardActions] Claim button state:', {
+        canClaim: cleanupStatus.canClaim,
+        hasPendingCleanup: cleanupStatus.hasPendingCleanup,
+        cleanupId: cleanupStatus.cleanupId?.toString(),
+        level: cleanupStatus.level,
+        isClaiming,
+        canClaimLevel,
+      })
+    }
 
     return (
         <div className="rounded-xl border-2 border-brand-green/30 bg-gradient-to-b from-brand-green/10 to-black p-2.5 flex flex-col h-full min-h-0 overflow-y-auto">
@@ -60,29 +77,52 @@ export function DashboardActions({
             </h2>
 
             <div className="space-y-2 flex-1 min-h-0 overflow-y-auto">
-                {/* Submit Cleanup Button */}
-                <Link href="/cleanup" className={!canSubmit ? 'pointer-events-none' : ''}>
-                    <Button
-                        disabled={!canSubmit}
-                        className="w-full gap-2 bg-brand-green py-6 font-bebas text-xl tracking-wider text-black hover:bg-brand-green/90 disabled:opacity-50"
-                    >
-                        <Leaf className="h-5 w-5" />
-                        SUBMIT CLEANUP
-                    </Button>
-                </Link>
+                {/* Submit Cleanup Button - Only show when user can submit */}
+                {canSubmit && (
+                    <Link href="/cleanup">
+                        <Button
+                            className="w-full gap-2 bg-brand-green py-6 font-bebas text-xl tracking-wider text-black hover:bg-brand-green/90"
+                        >
+                            <Leaf className="h-5 w-5" />
+                            SUBMIT CLEANUP
+                        </Button>
+                    </Link>
+                )}
 
-                {/* Claim Level Button */}
+                {/* Claim Level Button - Only show when verified and can claim */}
                 {cleanupStatus?.canClaim && (
-                    <div className="space-y-2">
+                    <div className="space-y-2" style={{ position: 'relative', zIndex: 10 }}>
                         <div className="rounded-lg border border-brand-yellow/30 bg-brand-yellow/10 p-2.5">
                             <p className="text-sm text-brand-yellow">
                                 🎉 Your cleanup has been verified! You can now claim your Impact Product (Level {cleanupStatus.level || 1}).
                             </p>
                         </div>
-                        <Button
-                            onClick={onClaim}
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              console.log('[DashboardActions] Claim button clicked', {
+                                canClaimLevel,
+                                isClaiming,
+                                cleanupId: cleanupStatus?.cleanupId?.toString(),
+                                hasOnClaim: !!onClaim,
+                              })
+                              if (canClaimLevel && !isClaiming && onClaim) {
+                                console.log('[DashboardActions] Calling onClaim...')
+                                onClaim().catch((error) => {
+                                  console.error('[DashboardActions] Error in onClaim:', error)
+                                })
+                              } else {
+                                console.warn('[DashboardActions] Claim button click ignored:', {
+                                  canClaimLevel,
+                                  isClaiming,
+                                  hasOnClaim: !!onClaim,
+                                })
+                              }
+                            }}
                             disabled={!canClaimLevel}
-                            className="w-full gap-2 bg-brand-yellow py-6 font-bebas text-xl tracking-wider text-black hover:bg-[#e6e600] disabled:opacity-50"
+                            className="w-full gap-2 bg-brand-yellow py-6 font-bebas text-xl tracking-wider text-black hover:bg-[#e6e600] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center rounded-md transition-all"
                         >
                             {isClaiming ? (
                                 <>
@@ -95,12 +135,12 @@ export function DashboardActions({
                                     CLAIM LEVEL
                                 </>
                             )}
-                        </Button>
+                        </button>
                     </div>
                 )}
 
-                {/* Pending Status */}
-                {cleanupStatus?.hasPendingCleanup && !cleanupStatus?.canClaim && (
+                {/* Pending Status - Show when under verification (both buttons hidden) */}
+                {isUnderVerification && (
                     <div className="rounded-lg border border-brand-green/30 bg-brand-green/10 p-3">
                         <p className="mb-2 font-bebas text-lg tracking-wide text-brand-green">
                             ⏳ UNDER REVIEW
@@ -120,7 +160,7 @@ export function DashboardActions({
                         </h3>
                     </div>
                     <p className="text-sm text-gray-400">
-                        Earn 3 cDCU when friends submit and verify their first cleanup. Share your referral link and earn rewards when your friends join DeCleanup Network.
+                        Earn 3 $cDCU when friends submit, get verified, and claim their first Impact Product level. Share your referral link and earn rewards when your friends join DeCleanup Network.
                     </p>
 
                     <div className="grid grid-cols-2 gap-2">

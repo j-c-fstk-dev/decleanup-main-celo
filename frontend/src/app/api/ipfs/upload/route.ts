@@ -18,8 +18,18 @@ export async function POST(request: NextRequest) {
       process.env.NEXT_PUBLIC_PINATA_SECRET_API_KEY
 
     if (!pinataApiKey || !pinataSecretKey) {
+      console.error('Pinata API keys missing. Checked:', {
+        PINATA_API_KEY: !!process.env.PINATA_API_KEY,
+        NEXT_PUBLIC_PINATA_API_KEY: !!process.env.NEXT_PUBLIC_PINATA_API_KEY,
+        PINATA_SECRET_KEY: !!process.env.PINATA_SECRET_KEY,
+        PINATA_SECRET_API_KEY: !!process.env.PINATA_SECRET_API_KEY,
+        NEXT_PUBLIC_PINATA_SECRET_KEY: !!process.env.NEXT_PUBLIC_PINATA_SECRET_KEY,
+        NEXT_PUBLIC_PINATA_SECRET_API_KEY: !!process.env.NEXT_PUBLIC_PINATA_SECRET_API_KEY,
+      })
       return NextResponse.json(
-        { error: 'Pinata API keys not configured on server' },
+        { 
+          error: 'Pinata API keys not configured. Please set PINATA_API_KEY and PINATA_SECRET_KEY in your .env.local file. See ENV_TEMPLATE.md for details.' 
+        },
         { status: 500 }
       )
     }
@@ -130,8 +140,18 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('IPFS upload API error:', error)
+    const errorMessage = error?.message || 'Failed to upload to IPFS'
+    
+    // Provide more helpful error messages
+    let userMessage = errorMessage
+    if (errorMessage.includes('fetch failed') || errorMessage.includes('Network')) {
+      userMessage = 'Network error: Could not connect to Pinata. Please check your internet connection and try again.'
+    } else if (errorMessage.includes('API keys')) {
+      userMessage = 'Pinata API keys not configured. Please set PINATA_API_KEY and PINATA_SECRET_KEY in your .env.local file.'
+    }
+    
     return NextResponse.json(
-      { error: error?.message || 'Failed to upload to IPFS' },
+      { error: userMessage },
       { status: 500 }
     )
   }

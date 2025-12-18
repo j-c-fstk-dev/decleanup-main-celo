@@ -8,6 +8,8 @@ import "@openzeppelin/contracts/utils/Base64.sol";
 
 interface IDCUNftRewardManager {
     function updateNftMintStatus(address user, bool hasMinted) external;
+    function rewardImpactProductClaim(address user, uint256 level) external;
+    function setPoiVerificationStatus(address user, bool status) external;
 }
 
 /**
@@ -20,6 +22,7 @@ contract ImpactProductNFT is ERC721, Ownable {
     uint256 public constant MAX_LEVEL = 10;
 
     address public rewardsContract;
+    address public submissionContract; // Submission contract can auto-verify POI
     uint256 private _tokenIdCounter;
 
     mapping(address => bool) public verifiedPOI;
@@ -48,10 +51,40 @@ contract ImpactProductNFT is ERC721, Ownable {
 
     // --- Verification ---
 
-    function verifyPOI(address user) external onlyOwner {
+    /**
+     * @dev Verify POI for a user
+     * Can be called by owner or by Submission contract (for automatic verification)
+     * This enables automatic POI verification when cleanups are approved, making the system
+     * work for new users without manual intervention
+     */
+    function verifyPOI(address user) external {
         require(user != address(0), "Invalid address");
-        verifiedPOI[user] = true;
-        emit POIVerified(user);
+        
+        // Allow owner to verify POI (manual verification)
+        if (msg.sender == owner()) {
+            verifiedPOI[user] = true;
+            emit POIVerified(user);
+            // Notify reward manager for streak reward distribution
+            if (rewardsContract != address(0)) {
+                try IDCUNftRewardManager(rewardsContract).setPoiVerificationStatus(user, true) {} catch {}
+            }
+            return;
+        }
+        
+        // Allow Submission contract to verify POI automatically
+        // This is set via setSubmissionContract() by the owner
+        if (msg.sender == submissionContract && submissionContract != address(0)) {
+            verifiedPOI[user] = true;
+            emit POIVerified(user);
+            // Notify reward manager for streak reward distribution
+            if (rewardsContract != address(0)) {
+                try IDCUNftRewardManager(rewardsContract).setPoiVerificationStatus(user, true) {} catch {}
+            }
+            return;
+        }
+        
+        // If we get here, caller is not authorized
+        revert("Only owner or Submission contract can verify POI");
     }
 
     // --- Configuration ---
@@ -60,6 +93,11 @@ contract ImpactProductNFT is ERC721, Ownable {
         require(newRewardsContract != address(0), "Invalid rewards contract address");
         rewardsContract = newRewardsContract;
         emit RewardsContractUpdated(newRewardsContract);
+    }
+
+    function setSubmissionContract(address newSubmissionContract) external onlyOwner {
+        require(newSubmissionContract != address(0), "Invalid submission contract address");
+        submissionContract = newSubmissionContract;
     }
 
     // --- Minting ---
@@ -89,6 +127,11 @@ contract ImpactProductNFT is ERC721, Ownable {
         _setUserTokenPointer(user, tokenId);
         _notifyRewardsContract(user, true);
 
+        // Distribute level reward (10 $cDCU) and referral reward (3 $cDCU) if applicable
+        if (rewardsContract != address(0)) {
+            try IDCUNftRewardManager(rewardsContract).rewardImpactProductClaim(user, 1) {} catch {}
+        }
+
         emit Minted(user, tokenId);
     }
 
@@ -105,6 +148,11 @@ contract ImpactProductNFT is ERC721, Ownable {
         uint256 newLevel = currentLevel + 1;
         nftLevel[tokenId] = newLevel;
         userLevel[msg.sender] = newLevel;
+
+        // Distribute level reward (10 $cDCU) for the new level
+        if (rewardsContract != address(0)) {
+            try IDCUNftRewardManager(rewardsContract).rewardImpactProductClaim(msg.sender, newLevel) {} catch {}
+        }
 
         emit NFTUpgraded(tokenId, newLevel);
     }

@@ -21,13 +21,13 @@ import {
   Copy,
 } from 'lucide-react'
 import Link from 'next/link'
-import { getDCUBalance, getStakedDCU, getUserLevel, getTokenURI, getTokenURIForLevel, getStreakCount, hasActiveStreak, claimImpactProductFromVerification,} from '@/lib/blockchain/contracts'
+import { getDCUBalance, getStakedDCU, getUserLevel, getUserTokenId, getTokenURI, getTokenURIForLevel, getStreakCount, hasActiveStreak, claimImpactProductFromVerification,} from '@/lib/blockchain/contracts'
 import { REQUIRED_BLOCK_EXPLORER_URL, REQUIRED_CHAIN_ID, REQUIRED_CHAIN_NAME } from '@/lib/blockchain/wagmi'
 import { useChainId } from 'wagmi'
 import { DashboardPersonalStats } from '@/components/dashboard/DashboardPersonalStats'
 import { DashboardImpactProduct } from '@/components/dashboard/DashboardImpactProduct'
 import { DashboardActions } from '@/components/dashboard/DashboardActions'
-import { getUserCleanupStatus } from '@/lib/blockchain/verification'
+import { getUserCleanupStatus, markCleanupAsClaimed } from '@/lib/blockchain/verification'
 import { CONTRACT_ADDRESSES } from '@/lib/blockchain/wagmi'
 const BLOCK_EXPLORER_NAME = REQUIRED_BLOCK_EXPLORER_URL.includes('sepolia')
   ? 'CeloScan (Sepolia)'
@@ -109,28 +109,33 @@ export default function ProfilePage() {
           setLoading(true)
         }
 
-        const [dcuBalance, stakedDCU, level, streak, activeStreak] = await Promise.all([
+        const [dcuBalance, stakedDCU, level, streak, activeStreak, tokenId] = await Promise.all([
           getDCUBalance(userAddress),
           getStakedDCU(userAddress),
           getUserLevel(userAddress),
           getStreakCount(userAddress),
           hasActiveStreak(userAddress),
+          getUserTokenId(userAddress),
         ])
 
         let tokenURI = ''
         let imageUrl = ''
         let animationUrl = ''
         let metadata: ImpactMetadata | null = null
-        let tokenId: bigint | null = null
         let impactValue: string | null = null
         let dcuReward: string | null = null
 
         if (level > 0) {
           try {
-            // ImpactProductNFT not part of this milestone (no tokenId on-chain).
-// Use level-based metadata only.
-tokenId = null
-tokenURI = await getTokenURIForLevel(level)
+            // Try to get token URI from NFT contract if tokenId exists
+            if (tokenId !== null) {
+              tokenURI = await getTokenURI(tokenId)
+            }
+            
+            // Fallback to level-based metadata if no token URI
+            if (!tokenURI) {
+              tokenURI = await getTokenURIForLevel(level)
+            }
 
 
             const convertIPFSToGateway = (ipfsUrl: string, gateways?: string[]) => {
@@ -325,19 +330,30 @@ useEffect(() => {
 
       if (cancelled) return
 
-      if (!status.hasPendingCleanup || !status.cleanupId) {
+      // Show cleanup status if there's a pending cleanup OR if user can claim
+      // This ensures claim button appears even if hasPendingCleanup logic changes
+      if (status.canClaim && status.cleanupId) {
+        // Map verification.ts status -> profile cleanupStatus shape
+        setCleanupStatus({
+          cleanupId: status.cleanupId,
+          verified: true, // canClaim means it's verified
+          claimed: false, // we don't track claimed here; claim clears pending
+          level: 1, // Default level for verified cleanup
+          loading: false,
+        })
+      } else if (status.hasPendingCleanup && status.cleanupId) {
+        // Pending cleanup (not yet verified)
+        setCleanupStatus({
+          cleanupId: status.cleanupId,
+          verified: false,
+          claimed: false,
+          level: 0,
+          loading: false,
+        })
+      } else {
+        // No pending cleanup and can't claim
         setCleanupStatus(null)
-        return
       }
-
-      // Map verification.ts status -> profile cleanupStatus shape
-      setCleanupStatus({
-        cleanupId: status.cleanupId,
-        verified: Boolean(status.canClaim), // approved & not claimed
-        claimed: false, // we don't track claimed here; claim clears pending
-        level: 0,
-        loading: false,
-      })
     } catch (error) {
       console.error('Error checking cleanup status:', error)
       if (!cancelled) setCleanupStatus(null)
@@ -491,12 +507,24 @@ useEffect(() => {
               level: cleanupStatus.level,
             } : null}
             onClaim={async () => {
-              if (!cleanupStatus?.cleanupId || isClaiming) return
+              // IMPORTANT: Check for null/undefined explicitly, not truthiness, because cleanup ID 0 is valid!
+              if (cleanupStatus?.cleanupId === undefined || cleanupStatus?.cleanupId === null || isClaiming) {
+                console.warn('[Profile] Claim blocked:', {
+                  cleanupId: cleanupStatus?.cleanupId?.toString(),
+                  isClaiming,
+                })
+                return
+              }
             
               try {
                 setIsClaiming(true)
             
                 await claimImpactProductFromVerification(cleanupStatus.cleanupId)
+
+                // Mark as claimed in localStorage
+                if (address && cleanupStatus.cleanupId) {
+                  markCleanupAsClaimed(address as Address, cleanupStatus.cleanupId)
+                }
 
                 alert(
                   `✅ Claim submitted!\n\n` +
@@ -504,9 +532,25 @@ useEffect(() => {
                   `Please wait for confirmation and refresh the page in a moment.`
                 )
             
-                // Refresh local status + profile data
+                // Refresh local status + profile data + cleanup status
                 if (address) {
+                  // Wait longer for state to update after claim (RPC propagation + NFT operations)
+                  await new Promise(resolve => setTimeout(resolve, 5000))
+                  
+                  console.log('[Profile] Refreshing profile data after claim...')
                   await loadProfileData(address as Address, { showSpinner: false })
+                  console.log('[Profile] Profile data refreshed')
+                  
+                  // Refresh cleanup status to hide claim button
+                  const newStatus = await getUserCleanupStatus(address as Address)
+                  console.log('[Profile] New cleanup status:', newStatus)
+                  setCleanupStatus(newStatus ? {
+                    cleanupId: newStatus.cleanupId,
+                    verified: newStatus.verified,
+                    claimed: newStatus.claimed,
+                    level: newStatus.canClaim ? 1 : 0,
+                    loading: false,
+                  } : null)
                 }
               } catch (error: any) {
                 console.error('Error claiming:', error)

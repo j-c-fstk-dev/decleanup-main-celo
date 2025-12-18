@@ -290,10 +290,16 @@ contract Submission is Ownable, ReentrancyGuard, AccessControl {
 
         // Reward flow through unified manager
         if (!s.rewarded) {
-            s.rewarded = true;
-            rewardManager.distributeRewards(s.submitter, defaultRewardAmount);
-
-            emit RewardAvailable(s.submitter, defaultRewardAmount, submissionId, block.timestamp);
+            // Distribute rewards first, then mark as rewarded only if successful
+            // This ensures the rewarded flag accurately reflects whether rewards were actually distributed
+            try rewardManager.distributeRewards(s.submitter, defaultRewardAmount) {
+                s.rewarded = true;
+                emit RewardAvailable(s.submitter, defaultRewardAmount, submissionId, block.timestamp);
+            } catch {
+                // If reward distribution fails, don't set rewarded flag
+                // This allows retry or manual distribution later
+                emit RewardAvailable(s.submitter, 0, submissionId, block.timestamp);
+            }
         }
 
         // Reward verifier (best-effort)
@@ -316,14 +322,30 @@ contract Submission is Ownable, ReentrancyGuard, AccessControl {
             }
         }
 
+        // Automatically verify POI when cleanup is approved (allows users to mint NFTs)
+        // This makes the system work for new users without manual intervention
+        if (address(impactProductNFT) != address(0)) {
+            try impactProductNFT.verifyPOI(s.submitter) {
+                // POI verified successfully
+            } catch {
+                // If POI verification fails (e.g., contract doesn't allow it), that's okay
+                // User can still claim tokens, just won't be able to mint NFT until manually verified
+            }
+        }
+
         emit SubmissionApproved(submissionId, msg.sender, block.timestamp);
 
         // Emit HypercertEligible based on NFT level (ImpactProductNFT is source of truth)
+        // Wrapped in try-catch because new users won't have an NFT until they claim their first level
         if (address(impactProductNFT) != address(0)) {
-            (, , uint256 level) = impactProductNFT.getUserNFTData(s.submitter);
-            if (level > 0 && level % 10 == 0) {
-                userHypercertCount[s.submitter]++;
-                emit HypercertEligible(s.submitter, userCleanupCount[s.submitter], userHypercertCount[s.submitter]);
+            try impactProductNFT.getUserNFTData(s.submitter) returns (uint256, uint256, uint256 level) {
+                if (level > 0 && level % 10 == 0) {
+                    userHypercertCount[s.submitter]++;
+                    emit HypercertEligible(s.submitter, userCleanupCount[s.submitter], userHypercertCount[s.submitter]);
+                }
+            } catch {
+                // If user has no NFT yet, that's fine - they'll get one when they claim
+                // No need to emit hypercert eligibility for users without NFTs
             }
         }
     }

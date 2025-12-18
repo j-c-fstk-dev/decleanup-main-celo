@@ -36,6 +36,10 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "DeCleanup Rewards",
   },
+  // Add mobile-web-app-capable to address deprecation warning
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
   formatDetection: {
     telephone: false,
   },
@@ -91,6 +95,7 @@ export default function RootLayout({
           name="twitter:image:alt"
           content="DeCleanup Rewards - Tokenize Your Environmental Impact"
         />
+        <meta name="mobile-web-app-capable" content="yes" />
       </head>
 
       <body

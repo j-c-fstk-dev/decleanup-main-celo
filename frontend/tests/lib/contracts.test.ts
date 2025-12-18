@@ -26,7 +26,7 @@ describe('Contract Utilities', () => {
   it('should have contract addresses defined', () => {
     // This test verifies that contract addresses are configured
     expect(process.env.NEXT_PUBLIC_IMPACT_PRODUCT_CONTRACT).toBeDefined()
-    expect(process.env.NEXT_PUBLIC_VERIFICATION_CONTRACT).toBeDefined()
+    expect(process.env.NEXT_PUBLIC_SUBMISSION_CONTRACT).toBeDefined()
     expect(process.env.NEXT_PUBLIC_REWARD_DISTRIBUTOR_CONTRACT).toBeDefined()
     expect(process.env.NEXT_PUBLIC_RECYCLABLES_CONTRACT).toBeDefined()
   })

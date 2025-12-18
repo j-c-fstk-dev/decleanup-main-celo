@@ -12,7 +12,7 @@ import { config } from '../blockchain/wagmi'
 /* -------------------------------------------------------------------------- */
 
 const VERIFICATION_CONTRACT =
-  process.env.NEXT_PUBLIC_VERIFICATION_CONTRACT as Address | undefined
+  process.env.NEXT_PUBLIC_SUBMISSION_CONTRACT as Address | undefined
 
 // Minimal ABI compatible with current MVP contracts.ts
 const VERIFICATION_ABI = [

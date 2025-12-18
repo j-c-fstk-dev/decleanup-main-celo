@@ -2,8 +2,17 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { WagmiProvider } from 'wagmi'
+import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit'
 import { config } from './blockchain/wagmi'
+import { CustomAvatar } from '@/components/wallet/CustomAvatar'
 import { useState } from 'react'
+import '@rainbow-me/rainbowkit/styles.css'
+
+const APP_NAME = 'DeCleanup Rewards'
+const APP_DESCRIPTION = 'Clean up, share proof, and earn tokenized environmental rewards on Celo.'
+const APP_ICON_URL =
+  process.env.NEXT_PUBLIC_MINIAPP_ICON_URL ||
+  'https://gateway.pinata.cloud/ipfs/bafybeiatsp354gtary234ie6irpa5x56q3maykjynkbe3f2hj6lq7pbvba?filename=icon.png'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -18,10 +27,32 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   )
 
+  // Enhanced theme customization
+  // RainbowKit's darkTheme accepts accentColor, accentColorForeground, borderRadius, fontStack, overlayBlur
+  // Additional customization can be done via CSS variables if needed
+  const customTheme = darkTheme({
+    accentColor: '#58B12F', // brand-green
+    accentColorForeground: 'black',
+    borderRadius: 'medium',
+    fontStack: 'system',
+    overlayBlur: 'small',
+  })
+
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        {children}
+        <RainbowKitProvider
+          theme={customTheme}
+          modalSize="compact"
+          coolMode
+          avatar={CustomAvatar}
+          appInfo={{
+            appName: APP_NAME,
+            learnMoreUrl: 'https://decleanup.net',
+          }}
+        >
+          {children}
+        </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   )

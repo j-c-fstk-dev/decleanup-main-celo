@@ -15,6 +15,7 @@ import {
 import { getIPFSUrl } from '@/lib/blockchain/ipfs'
 import type { Address } from 'viem'
 import { REQUIRED_BLOCK_EXPLORER_URL } from '@/lib/blockchain/wagmi'
+import { ImpactReportDetails } from '@/components/verifier/ImpactReportDetails'
 
 const BLOCK_EXPLORER_URL = REQUIRED_BLOCK_EXPLORER_URL || 'https://celo-sepolia.blockscout.com'
 
@@ -36,6 +37,7 @@ interface CleanupSubmission {
     recyclablesPhotoHash?: string
     recyclablesReceiptHash?: string
     impactFormDataHash?: string
+    approver?: string
 }
 
 const VERIFIER_AUTH_MESSAGE = 'I am requesting access to the DeCleanup Verifier Dashboard. This signature proves I control this wallet address.'
@@ -417,7 +419,7 @@ export default function VerifierPage() {
                 </div>
 
                 {/* Stats */}
-                <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
                     <div className="rounded-lg border border-border bg-card p-4">
                         <div className="text-sm text-muted-foreground">Total Cleanups</div>
                         <div className="mt-1 font-bebas text-2xl text-foreground">{cleanups.length}</div>
@@ -433,6 +435,15 @@ export default function VerifierPage() {
                     <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4">
                         <div className="text-sm text-gray-400">Rejected Cleanups</div>
                         <div className="mt-1 font-bebas text-2xl text-red-400">{rejectedCleanups.length}</div>
+                    </div>
+                    <div className="rounded-lg border border-brand-green/50 bg-brand-green/10 p-4">
+                        <div className="text-sm text-gray-400">Your Earnings</div>
+                        <div className="mt-1 font-bebas text-2xl text-brand-green">
+                            {address ? (
+                                verifiedCleanups.filter(c => c.approver?.toLowerCase() === address.toLowerCase()).length
+                            ) : 0} $cDCU
+                        </div>
+                        <div className="mt-1 text-xs text-gray-500">1 $cDCU per verification</div>
                     </div>
                 </div>
 
@@ -500,6 +511,17 @@ export default function VerifierPage() {
                                                 </span>
                                             )}
                                         </div>
+                                        
+                                        {/* Impact Report Details */}
+                                        {cleanup.hasImpactForm && cleanup.impactFormDataHash && (
+                                            <div className="mb-3">
+                                                <ImpactReportDetails 
+                                                    impactReportHash={cleanup.impactFormDataHash}
+                                                    cleanupId={cleanup.id}
+                                                />
+                                            </div>
+                                        )}
+                                        
                                         <div className="flex gap-2">
                                             <Button
                                                 onClick={() => handleVerify(cleanup.id)}

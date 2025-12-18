@@ -367,6 +367,8 @@ export default function VerifierPage() {
             verified: details.verified,
             claimed: details.claimed,
             level: details.level,
+            hasImpactForm: details.hasImpactForm,
+            impactFormDataHash: details.impactFormDataHash,
           })
           
           cleanupList.push({
@@ -374,9 +376,17 @@ export default function VerifierPage() {
             id: BigInt(i),
             rejected: details.rejected || false,
             referrer: '0x0000000000000000000000000000000000000000',
-            hasImpactForm: false,
-            impactReportHash: '',
+            hasImpactForm: details.hasImpactForm || false,
+            impactReportHash: details.impactFormDataHash || '',
           })
+          
+          // Debug: Log impact report data
+          if (details.hasImpactForm || details.impactFormDataHash) {
+            console.log(`Cleanup ${i} has impact report:`, {
+              hasImpactForm: details.hasImpactForm,
+              impactFormDataHash: details.impactFormDataHash,
+            })
+          }
          
           
         } catch (error: any) {
@@ -949,7 +959,7 @@ export default function VerifierPage() {
               <p className="mb-2 text-sm font-semibold text-white">Troubleshooting:</p>
               <ul className="list-inside list-disc space-y-1 text-sm text-gray-400">
                 <li>Ensure contracts are deployed with your address in VERIFIER_ADDRESSES</li>
-                <li>Check that NEXT_PUBLIC_VERIFICATION_CONTRACT matches the deployed contract</li>
+                <li>Check that NEXT_PUBLIC_SUBMISSION_CONTRACT matches the deployed contract</li>
                 <li>Verify you're connected to the correct network ({REQUIRED_CHAIN_NAME})</li>
                 <li>Check browser console for detailed error messages</li>
               </ul>
@@ -1133,33 +1143,65 @@ export default function VerifierPage() {
                         {cleanup.referrer !== '0x0000000000000000000000000000000000000000' && (
                           <div className="text-xs text-yellow-400">Referred by: {cleanup.referrer.slice(0, 10)}...</div>
                         )}
-                        {cleanup.hasImpactForm && (
-                          <div className="text-xs">
-                            <button
-                              onClick={() => {
-                                const formId = cleanup.id.toString()
-                                setExpandedForms(prev => {
-                                  const newSet = new Set(prev)
-                                  if (newSet.has(formId)) {
-                                    newSet.delete(formId)
-                                  } else {
-                                    newSet.add(formId)
-                                  }
-                                  return newSet
-                                })
-                              }}
-                              className="flex items-center gap-1 text-green-400 hover:text-green-300"
-                            >
-                              ✓ Enhanced impact form submitted
-                              <span className="text-xs text-gray-400">(click to {expandedForms.has(cleanup.id.toString()) ? 'collapse' : 'expand'})</span>
-                            </button>
-                            {expandedForms.has(cleanup.id.toString()) && cleanup.impactReportHash && (
-                              <div className="mt-2">
-                                <ImpactReportDetails key={`${cleanup.id}-${cleanup.impactReportHash}`} impactReportHash={cleanup.impactReportHash} />
-                              </div>
+                        <div className="text-xs">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              const formId = cleanup.id.toString()
+                              console.log('Impact report button clicked:', {
+                                cleanupId: formId,
+                                hasImpactForm: cleanup.hasImpactForm,
+                                impactReportHash: cleanup.impactReportHash,
+                                currentlyExpanded: expandedForms.has(formId),
+                              })
+                              setExpandedForms(prev => {
+                                const newSet = new Set(prev)
+                                if (newSet.has(formId)) {
+                                  newSet.delete(formId)
+                                  console.log('Collapsing impact report for cleanup', formId)
+                                } else {
+                                  newSet.add(formId)
+                                  console.log('Expanding impact report for cleanup', formId)
+                                }
+                                return newSet
+                              })
+                            }}
+                            className={`flex items-center gap-1 hover:opacity-80 cursor-pointer ${
+                              cleanup.hasImpactForm 
+                                ? 'text-green-400 hover:text-green-300' 
+                                : 'text-gray-500 hover:text-gray-400'
+                            }`}
+                          >
+                            {cleanup.hasImpactForm ? (
+                              <>
+                                ✓ Impact Report submitted
+                                <span className="text-xs text-gray-400 ml-1">
+                                  ({expandedForms.has(cleanup.id.toString()) ? 'hide' : 'expand'})
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                ✗ Impact Report not submitted
+                                <span className="text-xs text-gray-400 ml-1">
+                                  ({expandedForms.has(cleanup.id.toString()) ? 'hide' : 'expand'})
+                                </span>
+                              </>
                             )}
-                          </div>
-                        )}
+                          </button>
+                          {expandedForms.has(cleanup.id.toString()) && (
+                            <div className="mt-2">
+                              {cleanup.hasImpactForm && cleanup.impactReportHash ? (
+                                <ImpactReportDetails key={`${cleanup.id}-${cleanup.impactReportHash}`} impactReportHash={cleanup.impactReportHash} />
+                              ) : (
+                                <div className="rounded-lg border border-gray-700 bg-gray-800 p-3 text-sm text-gray-400">
+                                  No impact report data available for this cleanup.
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -1444,11 +1486,54 @@ export default function VerifierPage() {
                           <MapPin className="h-4 w-4" />
                           <span>{formatCoordinates(cleanup.latitude, cleanup.longitude)}</span>
                         </div>
-                        {cleanup.hasImpactForm && (
-                          <div className="text-xs text-gray-500">
-                            Enhanced impact form submitted
-                          </div>
-                        )}
+                        <div className="text-xs">
+                          <button
+                            onClick={() => {
+                              const formId = `verified-${cleanup.id.toString()}`
+                              setExpandedForms(prev => {
+                                const newSet = new Set(prev)
+                                if (newSet.has(formId)) {
+                                  newSet.delete(formId)
+                                } else {
+                                  newSet.add(formId)
+                                }
+                                return newSet
+                              })
+                            }}
+                            className={`flex items-center gap-1 hover:opacity-80 ${
+                              cleanup.hasImpactForm 
+                                ? 'text-green-400 hover:text-green-300' 
+                                : 'text-gray-500 hover:text-gray-400'
+                            }`}
+                          >
+                            {cleanup.hasImpactForm ? (
+                              <>
+                                ✓ Impact Report submitted
+                                <span className="text-xs text-gray-400 ml-1">
+                                  ({expandedForms.has(`verified-${cleanup.id.toString()}`) ? 'hide' : 'expand'})
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                ✗ Impact Report not submitted
+                                <span className="text-xs text-gray-400 ml-1">
+                                  ({expandedForms.has(`verified-${cleanup.id.toString()}`) ? 'hide' : 'expand'})
+                                </span>
+                              </>
+                            )}
+                          </button>
+                          {expandedForms.has(`verified-${cleanup.id.toString()}`) && (
+                            <div className="mt-2">
+                              {cleanup.hasImpactForm && cleanup.impactReportHash ? (
+                                <ImpactReportDetails key={`${cleanup.id}-${cleanup.impactReportHash}`} impactReportHash={cleanup.impactReportHash} />
+                              ) : (
+                                <div className="rounded-lg border border-gray-700 bg-gray-800 p-3 text-sm text-gray-400">
+                                  No impact report data available for this cleanup.
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -1534,32 +1619,54 @@ export default function VerifierPage() {
                       </div>
                     </div>
                   </div>
-                  {cleanup.hasImpactForm && (
-                    <div className="mt-4">
-                      <button
-                        onClick={() => {
-                          const formId = cleanup.id.toString()
-                          setExpandedForms(prev => {
-                            const newSet = new Set(prev)
-                            if (newSet.has(formId)) {
-                              newSet.delete(formId)
-                            } else {
-                              newSet.add(formId)
-                            }
-                            return newSet
-                          })
-                        }}
-                        className="text-sm text-gray-400 hover:text-gray-300"
-                      >
-                        {expandedForms.has(cleanup.id.toString()) ? '▼' : '▶'} View Impact Report
-                      </button>
-                      {expandedForms.has(cleanup.id.toString()) && cleanup.impactReportHash && (
-                        <div className="mt-2">
-                          <ImpactReportDetails key={`${cleanup.id}-${cleanup.impactReportHash}`} impactReportHash={cleanup.impactReportHash} />
-                        </div>
+                  <div className="mt-4">
+                    <button
+                      onClick={() => {
+                        const formId = `rejected-${cleanup.id.toString()}`
+                        setExpandedForms(prev => {
+                          const newSet = new Set(prev)
+                          if (newSet.has(formId)) {
+                            newSet.delete(formId)
+                          } else {
+                            newSet.add(formId)
+                          }
+                          return newSet
+                        })
+                      }}
+                      className={`text-sm hover:opacity-80 ${
+                        cleanup.hasImpactForm 
+                          ? 'text-green-400 hover:text-green-300' 
+                          : 'text-gray-500 hover:text-gray-400'
+                      }`}
+                    >
+                      {cleanup.hasImpactForm ? (
+                        <>
+                          ✓ Impact Report submitted
+                          <span className="text-xs text-gray-400 ml-1">
+                            ({expandedForms.has(`rejected-${cleanup.id.toString()}`) ? 'hide' : 'expand'})
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          ✗ Impact Report not submitted
+                          <span className="text-xs text-gray-400 ml-1">
+                            ({expandedForms.has(`rejected-${cleanup.id.toString()}`) ? 'hide' : 'expand'})
+                          </span>
+                        </>
                       )}
-                    </div>
-                  )}
+                    </button>
+                    {expandedForms.has(`rejected-${cleanup.id.toString()}`) && (
+                      <div className="mt-2">
+                        {cleanup.hasImpactForm && cleanup.impactReportHash ? (
+                          <ImpactReportDetails key={`${cleanup.id}-${cleanup.impactReportHash}`} impactReportHash={cleanup.impactReportHash} />
+                        ) : (
+                          <div className="rounded-lg border border-gray-700 bg-gray-800 p-3 text-sm text-gray-400">
+                            No impact report data available for this cleanup.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 p-3">
                     <div className="flex items-center gap-2 text-sm text-red-400">
                       <XCircle className="h-4 w-4" />

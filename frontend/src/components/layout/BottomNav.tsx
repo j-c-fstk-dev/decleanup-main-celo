@@ -30,12 +30,6 @@ export function BottomNav() {
       label: 'Home',
       active: pathname === '/',
     },
-    {
-      href: '/profile',
-      icon: User,
-      label: 'My Profile',
-      active: pathname === '/profile',
-    },
     ...(isVerifierWallet
       ? [
           {
