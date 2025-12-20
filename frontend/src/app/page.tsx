@@ -372,7 +372,7 @@ function HomeContent() {
                   return 0
                 }
               })
-            ).then(results => results.reduce((a, b) => a + b, 0))
+            ).then(results => results.reduce((a: number, b: number) => a + b, 0))
             
             if (verifiedCount > 0) {
               console.log(`[Reward Stats] User has ${verifiedCount} verified cleanup(s) but cleanupsDCU is 0`)

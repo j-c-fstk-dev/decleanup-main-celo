@@ -29,12 +29,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
               }
               return failureCount < 2
             },
-            onError: (error: any) => {
-              // Suppress CORS errors in console (they're expected for ENS avatar fetching)
-              if (!error?.message?.includes('CORS') && !error?.message?.includes('Access-Control-Allow-Origin')) {
-                console.error('Query error:', error)
-              }
-            },
           },
         },
       })
