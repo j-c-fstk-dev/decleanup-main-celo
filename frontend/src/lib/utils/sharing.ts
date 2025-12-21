@@ -5,10 +5,8 @@
  * @returns Full referral URL
  */
 export function generateReferralLink(address: string, platform: string = 'web'): string {
-    if (typeof window === 'undefined') {
-        return `https://decleanup.network?ref=${address}`
-    }
-    return `${window.location.origin}?ref=${address}&utm_source=${platform}`
+    // Always use the production dapp URL for referral links
+    return `https://dapp.decleanup.net?ref=${address}`
 }
 
 /**

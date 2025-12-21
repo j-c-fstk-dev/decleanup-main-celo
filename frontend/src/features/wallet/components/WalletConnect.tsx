@@ -2,9 +2,13 @@
 
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useEffect, useState } from 'react'
+import { useAccount, useChainId } from 'wagmi'
+import { REQUIRED_CHAIN_ID } from '@/lib/blockchain/wagmi'
 
 export function WalletConnect() {
   const [mounted, setMounted] = useState(false)
+  const { isConnected } = useAccount()
+  const chainId = useChainId()
 
   // Fix hydration error by only showing wallet state after mount
   useEffect(() => {
@@ -34,6 +38,8 @@ export function WalletConnect() {
         smallScreen: false,
         largeScreen: true,
       }}
+      // Don't automatically switch chains on connect - let NetworkChecker handle it
+      // This prevents double wallet prompts (one for connect, one for switch)
     />
   )
 }

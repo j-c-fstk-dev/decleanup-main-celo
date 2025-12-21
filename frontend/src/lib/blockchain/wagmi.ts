@@ -72,7 +72,7 @@ const APP_URL = process.env.NEXT_PUBLIC_MINIAPP_URL || 'http://localhost:3000'
 const APP_DESCRIPTION = 'Clean up, share proof, and earn tokenized environmental rewards on Celo.'
 const APP_ICON_URL =
   process.env.NEXT_PUBLIC_MINIAPP_ICON_URL ||
-  'https://gateway.pinata.cloud/ipfs/bafybeiatsp354gtary234ie6irpa5x56q3maykjynkbe3f2hj6lq7pbvba?filename=icon.png'
+  'https://gateway.pinata.cloud/ipfs/bafkreia2bx2ofiutdzyxyry5wfaq5kj7bcd4wvutpiw6bhbl35qdbmsat4?filename=iconDCU.png'
 
 // RainbowKit configuration with getDefaultConfig
 // getDefaultConfig automatically includes popular wallets (MetaMask, WalletConnect, Coinbase, etc.)

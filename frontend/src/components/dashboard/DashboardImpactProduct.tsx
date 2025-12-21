@@ -34,15 +34,35 @@ export function DashboardImpactProduct({
     const [copying, setCopying] = useState<string | null>(null)
     const [hypercertsEarned, setHypercertsEarned] = useState<number>(0)
     const [loadingStats, setLoadingStats] = useState(false)
+    const [imageLoading, setImageLoading] = useState(true)
 
     // Level = number of cleanups completed (each level represents one verified cleanup)
     const cleanupsCompleted = level
+
+    const levelName = getLevelName(level)
+    // Use specific level number for Impact Value, not a range
+    const impactValueToDisplay = impactValue || String(level)
+    
+    // Prefer IPFS URLs from metadata, then try IPFS with CID, fallback to local paths only if no CID
+    const imagesCID = process.env.NEXT_PUBLIC_IMPACT_IMAGES_CID || 'bafybeifygxoux2l63muhba4j6gez3vlbe7enjnlkpjwfupylnkhgkqg54y'
+    const gateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || 'https://gateway.pinata.cloud/ipfs/'
+    
+    // Always use IPFS if we have a CID, even if imageUrl prop is empty
+    const imageUrlToUse = imageUrl || (level > 0 ? `${gateway}${imagesCID}/IP${level === 10 ? '10Placeholder' : level}.png` : null) || getImpactProductImagePath(level)
+    const animationUrlToUse = animationUrl || (level === 10 ? `${gateway}${imagesCID}/IP10VIdeo.mp4` : null) || (level === 10 ? getImpactProductAnimationPath() : null)
 
     useEffect(() => {
         if (address && level > 0) {
             loadHypercertStats()
         }
     }, [address, level])
+
+    // Reset image loading when imageUrl changes
+    useEffect(() => {
+        if (imageUrlToUse) {
+            setImageLoading(true)
+        }
+    }, [imageUrlToUse])
 
     const loadHypercertStats = async () => {
         if (!address) return
@@ -56,18 +76,6 @@ export function DashboardImpactProduct({
             setLoadingStats(false)
         }
     }
-
-    const levelName = getLevelName(level)
-    // Use specific level number for Impact Value, not a range
-    const impactValueToDisplay = impactValue || String(level)
-    
-    // Prefer IPFS URLs from metadata, then try IPFS with CID, fallback to local paths only if no CID
-    const imagesCID = process.env.NEXT_PUBLIC_IMPACT_IMAGES_CID || 'bafybeifygxoux2l63muhba4j6gez3vlbe7enjnlkpjwfupylnkhgkqg54y'
-    const gateway = process.env.NEXT_PUBLIC_IPFS_GATEWAY || 'https://gateway.pinata.cloud/ipfs/'
-    
-    // Always use IPFS if we have a CID, even if imageUrl prop is empty
-    const imageUrlToUse = imageUrl || (level > 0 ? `${gateway}${imagesCID}/IP${level === 10 ? '10Placeholder' : level}.png` : null) || getImpactProductImagePath(level)
-    const animationUrlToUse = animationUrl || (level === 10 ? `${gateway}${imagesCID}/IP10VIdeo.mp4` : null) || (level === 10 ? getImpactProductAnimationPath() : null)
 
     const handleCopy = async (value: string, label: string) => {
         try {
@@ -96,7 +104,14 @@ export function DashboardImpactProduct({
             {level > 0 ? (
                 <div className="space-y-4 flex flex-col">
                     {/* NFT Display */}
-                    <div className="w-full overflow-hidden rounded-xl border-2 border-brand-green/30 bg-gradient-to-br from-brand-green/5 to-black flex-shrink-0 flex items-center justify-center p-4 sm:p-6 aspect-[3/4] max-h-[500px]">
+                    <div className="w-full overflow-hidden rounded-xl border-2 border-brand-green/30 bg-gradient-to-br from-brand-green/5 to-black flex-shrink-0 flex items-center justify-center p-4 sm:p-6 aspect-[3/4] max-h-[500px] relative">
+                        {imageLoading && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="relative">
+                                    <div className="h-16 w-16 border-4 border-brand-green/30 border-t-brand-green rounded-full animate-spin"></div>
+                                </div>
+                            </div>
+                        )}
                         {level === 10 && animationUrlToUse ? (
                             <video
                                 src={animationUrlToUse}
@@ -105,7 +120,9 @@ export function DashboardImpactProduct({
                                 muted
                                 playsInline
                                 className="max-h-full max-w-full object-contain"
+                                onLoadedData={() => setImageLoading(false)}
                                 onError={(e) => {
+                                    setImageLoading(false)
                                     // Fallback to static image if animation fails
                                     const target = e.target as HTMLVideoElement
                                     if (imageUrlToUse && target.parentElement) {
@@ -123,6 +140,8 @@ export function DashboardImpactProduct({
                                 alt={`Level ${level} Impact Product`}
                                 className="max-h-full max-w-full object-contain"
                                 loading="lazy"
+                                onLoad={() => setImageLoading(false)}
+                                onError={() => setImageLoading(false)}
                             />
                         ) : (
                             <div className="flex h-full items-center justify-center">

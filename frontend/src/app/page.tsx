@@ -18,6 +18,7 @@ import { mintHypercert } from '@/lib/blockchain/hypercerts-minting'
 import { DashboardActions } from '@/components/dashboard/DashboardActions'
 import { markCleanupAsClaimed, clearPendingCleanup } from '@/lib/blockchain/verification'
 import { resetCleanupState, resetAllCleanupState } from '@/lib/utils/reset-cleanup'
+import { generateReferralLink } from '@/lib/utils/sharing'
 import type { Address } from 'viem'
 
 interface ImpactAttribute {
@@ -765,7 +766,7 @@ function HomeContent() {
                   🎉 You Were Invited!
                 </h3>
                 <p className="text-sm text-gray-300">
-                  You've been referred to DeCleanup Rewards! When you submit your first cleanup, get it verified, and claim your first Impact Product level, both you and your referrer will earn <strong className="text-white">3 $cDCU</strong> each as referral rewards. You'll also receive <strong className="text-white">10 $cDCU</strong> for claiming your first level.
+                  You've been referred to DeCleanup Rewards! When you submit your first cleanup, get it verified, and claim your first Impact Product level, both you and your referrer will earn <strong className="text-white">3 $cDCU</strong> each as referral rewards. Additionally, you'll receive <strong className="text-white">10 $cDCU</strong> for claiming your first level (separate from referral rewards).
                 </p>
                 <p className="mt-2 text-xs text-gray-400">
                   Your referrer will be automatically credited when you claim your first level.
@@ -855,7 +856,7 @@ function HomeContent() {
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <div className="group rounded-xl border border-brand-green/30 bg-brand-green/5 p-4 hover:border-brand-green/50 hover:bg-brand-green/10 transition-all">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total $cDCU</span>
+                    <span className="text-xs font-sans font-semibold text-muted-foreground tracking-wide">Total $cDCU</span>
                     <TrendingUp className="h-4 w-4 text-brand-green transition-transform group-hover:scale-110" />
                   </div>
                   <p className="font-bebas text-3xl text-brand-green leading-none">
@@ -865,7 +866,7 @@ function HomeContent() {
                 
                 <div className="group rounded-xl border border-brand-green/30 bg-brand-green/5 p-4 hover:border-brand-green/50 hover:bg-brand-green/10 transition-all">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total $cRECY</span>
+                    <span className="text-xs font-sans font-semibold text-muted-foreground tracking-wide">Total $cRECY</span>
                     <TrendingUp className="h-4 w-4 text-brand-green transition-transform group-hover:scale-110" />
                   </div>
                   <p className="font-bebas text-3xl text-brand-green leading-none">
@@ -990,7 +991,8 @@ function HomeContent() {
                   className="gap-2 border-brand-green/30 bg-brand-green/5 px-3 py-2 h-auto text-xs font-bebas tracking-wider text-brand-green hover:bg-brand-green/10 hover:border-brand-green/50"
                   onClick={() => {
                     if (!address) return
-                    const link = `${window.location.origin}?ref=${address}`
+                    const { generateReferralLink } = require('@/lib/utils/sharing')
+                    const link = generateReferralLink(address)
                     const message = `Join me in @decleanupnet Rewards 🌍
 
 Clean up, prove impact, earn Impact Products, build reputation, and soon vote on global cleanup decisions in the Celo app.
@@ -1008,7 +1010,7 @@ Clean up, prove impact, earn Impact Products, build reputation, and soon vote on
                   className="gap-2 border-border px-3 py-2 h-auto text-xs font-bebas tracking-wider hover:bg-accent"
                   onClick={() => {
                     if (!address) return
-                    const link = `${window.location.origin}?ref=${address}`
+                    const link = generateReferralLink(address)
                     const message = `Join me in @decleanupnet Rewards 🌍
 
 Clean up, prove impact, earn Impact Products, build reputation, and soon vote on global cleanup decisions in the Celo app.
@@ -1029,7 +1031,7 @@ Clean up, prove impact, earn Impact Products, build reputation, and soon vote on
                   className="gap-2 border-border px-3 py-2 h-auto text-xs font-bebas tracking-wider hover:bg-accent"
                   onClick={async () => {
                     if (!address) return
-                    const link = `${window.location.origin}?ref=${address}`
+                    const link = generateReferralLink(address)
                     const message = `Join me in @decleanupnet Rewards 🌍
 
 Clean up, prove impact, earn Impact Products, build reputation, and soon vote on global cleanup decisions in the Celo app.

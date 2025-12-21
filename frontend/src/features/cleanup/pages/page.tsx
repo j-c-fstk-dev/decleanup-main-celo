@@ -1134,7 +1134,7 @@ function CleanupContent() {
               🎉 You Were Invited!
             </h3>
             <p className="text-sm text-gray-300">
-              You've been referred to DeCleanup Rewards! When you submit your first cleanup, get it verified, and claim your first Impact Product level, both you and your referrer will earn <strong className="text-white">3 $cDCU</strong> each as referral rewards. You'll also receive <strong className="text-white">10 $cDCU</strong> for claiming your first level.
+              You've been referred to DeCleanup Rewards! When you submit your first cleanup, get it verified, and claim your first Impact Product level, both you and your referrer will earn <strong className="text-white">3 $cDCU</strong> each as referral rewards. Additionally, you'll receive <strong className="text-white">10 $cDCU</strong> for claiming your first level (separate from referral rewards).
             </p>
             <p className="mt-2 text-xs text-gray-400">
               Submit a cleanup below to get started and claim your referral reward!

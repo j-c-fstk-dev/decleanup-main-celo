@@ -39,7 +39,7 @@ export function DashboardPersonalStats({
                 {/* Total cDCU */}
                 <div className="rounded-lg border border-brand-green/20 bg-black/50 p-2.5">
                     <div className="mb-2 flex items-center justify-between">
-                        <span className="font-bebas text-sm tracking-wide text-gray-400">TOTAL $cDCU</span>
+                        <span className="font-sans text-sm font-semibold text-gray-400">Total $cDCU</span>
                         <TrendingUp className="h-4 w-4 text-brand-green" />
                     </div>
                     <p className="font-bebas text-3xl text-brand-green">{dcuBalance.toFixed(0)}</p>

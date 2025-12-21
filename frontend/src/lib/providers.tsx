@@ -57,6 +57,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
             appName: APP_NAME,
             learnMoreUrl: 'https://decleanup.net',
           }}
+          // Don't automatically switch chains - let NetworkChecker handle it
+          // This prevents double wallet prompts
         >
           {children}
         </RainbowKitProvider>
