@@ -823,6 +823,15 @@ export async function getSubmissionFee(): Promise<{
   }
 }
 
+/**
+ * Check if an address is a verifier
+ * 
+ * Current implementation: Checks VERIFIER_ROLE (whitelisted addresses)
+ * Future implementation: Will also check $cDCU staking status
+ * 
+ * @param _address - Address to check
+ * @returns true if address is a verifier, false otherwise
+ */
 export async function isVerifier(_address: Address): Promise<boolean> {
   if (!SUBMISSION_ADDRESS) {
     return false
@@ -841,6 +850,10 @@ export async function isVerifier(_address: Address): Promise<boolean> {
       functionName: 'hasRole',
       args: [verifierRole as `0x${string}`, _address],
     })
+
+    // TODO: Future - Also check $cDCU staking status
+    // const stakingStatus = await checkVerifierStaking(_address)
+    // return hasRole && stakingStatus
 
     return hasRole as boolean
   } catch (error) {

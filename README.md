@@ -58,12 +58,72 @@ cd ../contracts && npx hardhat test
 Copy `frontend/ENV_TEMPLATE.md` → `.env.local` and fill the values (Chain ID, RPCs, WalletConnect ID, contract addresses, Pinata keys, Hypercerts network).  
 For contracts, create `contracts/.env` with your RPC + explorer keys if you plan to verify on CeloScan.
 
+## 🤖 ML Verification (DMRV)
+
+**Phase 1 & 2 Complete:** AI-assisted verification using YOLOv8 waste detection
+
+- **GPU Inference Service** – YOLOv8 waste detection (TACO dataset)
+- **VPS Backend** – Photo storage and orchestration
+- **Verification Scoring** – Automated decision making
+- **On-Chain Hash Storage** – Immutable audit trail
+
+**Quick Start:** See [DMRV Quick Start](docs/DMRV_QUICK_START.md)
+
+### YOLOv8 on TACO Dataset Integration
+
+**Overview:**
+The DeCleanup Network uses YOLOv8 (You Only Look Once version 8), a state-of-the-art object detection model, fine-tuned on the **TACO (Trash Annotations in Context) dataset** for automated waste detection in cleanup photos.
+
+**Why YOLOv8 + TACO?**
+- **YOLOv8**: Fast, accurate real-time object detection with excellent performance on edge devices
+- **TACO Dataset**: Comprehensive dataset with 60 categories of litter types, providing robust training data for real-world waste detection scenarios
+- **Fine-tuning**: Model trained specifically on litter/waste objects improves accuracy for cleanup verification
+
+**How It Works:**
+1. **Image Upload**: Users submit before/after cleanup photos via IPFS
+2. **GPU Inference**: YOLOv8 model analyzes each photo, detecting waste objects with bounding boxes and confidence scores
+3. **Verification Scoring**: System compares before/after object counts:
+   - **Delta Calculation**: `delta = beforeCount - afterCount`
+   - **Confidence Weighting**: Mean confidence scores from detected objects
+   - **Automated Verdict**: 
+     - `AUTO_VERIFIED` (score ≥ 0.5): Significant waste reduction detected
+     - `NEEDS_REVIEW` (0.25 ≤ score < 0.5): Moderate reduction, human verification recommended
+     - `REJECTED` (score < 0.25): No significant reduction or same image detected
+4. **On-Chain Storage**: Verification hash stored on-chain for immutable audit trail
+
+**Model Configuration:**
+- **Confidence Threshold**: 0.15 (lowered from 0.25 to detect more objects)
+- **Model Version**: `yolov8n-default` (nano variant for faster inference)
+- **Detection Classes**: 60+ waste categories from TACO dataset (plastic, glass, metal, paper, etc.)
+
+**Technical Details:**
+- **Inference Service**: FastAPI-based GPU service running YOLOv8
+- **Image Processing**: Downloads images from IPFS, runs inference, returns structured JSON with detected objects
+- **Scoring Algorithm**: Weighted combination of confidence scores (40%) and trash reduction delta (60%)
+- **Special Cases**: Handles edge cases like negative deltas (more objects after cleanup) and same-image detection
+
+**Recommended Models (2025):**
+- **TACO fine-tuned**: https://github.com/jeremy-rico/litter-detection ⭐ (Best for real-world litter detection)
+- **detect-waste**: https://huggingface.co/Yorai/detect-waste (Non-profit oriented, eco-focused)
+- **waste-detection**: https://huggingface.co/sharktide/waste-detection (Simple, effective)
+
+**See Also:**
+- [GPU Inference Service README](gpu-inference-service/README.md) – Detailed setup and API documentation
+- [ML Verification Architecture](docs/ML_VERIFICATION_ARCHITECTURE.md) – System architecture details
+- [DMRV Complete Guide](docs/DMRV_COMPLETE_GUIDE.md) – Complete integration guide
+
 ## 📚 Documentation
 
 - **[System Architecture](docs/system-architecture.md)** – Complete end-to-end diagram of frontend/client, contracts, IPFS interactions, and data flow
 - **[Deployment Plan](docs/deployment-plan.md)** – Step-by-step deployment guide with environment setup and post-deployment configuration
 - **[Recyclables Module](docs/recyclables-module.md)** – cRECY reserve requirements, Submission hook, and reserve sync checklist
 - **[Hypercerts & Impact](docs/hypercerts-and-impact.md)** – Future implementation guide for Hypercert aggregation and rewards (currently postponed)
+
+### ML Verification Docs
+
+- **[DMRV Complete Guide](docs/DMRV_COMPLETE_GUIDE.md)** ⭐ – **Complete step-by-step integration guide (START HERE)**
+- **[ML Verification Architecture](docs/ML_VERIFICATION_ARCHITECTURE.md)** – System architecture details
+- **[Partnership Opportunities](docs/PARTNERSHIP_OPPORTUNITIES.md)** – Potential partners and development branches
 
 ## 🚀 Deployment Status
 

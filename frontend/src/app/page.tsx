@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { useAccount, useChainId } from 'wagmi'
 import { useSearchParams } from 'next/navigation'
-import { Leaf, Award, Users, Share2, Copy, Heart, TrendingUp, Flame, Info, FileText, Shield, Trophy, CheckSquare, Loader2, X } from 'lucide-react'
+import { Leaf, Award, Users, Share2, Copy, Heart, TrendingUp, Flame, Info, FileText, Shield, Trophy, CheckSquare, Loader2, X, CheckCircle, AlertCircle, XCircle } from 'lucide-react'
 import { getUserCleanupStatus } from '@/lib/blockchain/verification'
 import { claimImpactProductFromVerification, getHypercertEligibility, getDCUBalance, getUserRewardStats, getUserLevel, getUserTokenId, getTokenURI, getTokenURIForLevel, getUserSubmissions, getCleanupDetails, getClaimFee } from '@/lib/blockchain/contracts'
 import { formatEther } from 'viem'
@@ -117,6 +117,12 @@ function HomeContent() {
     level?: number
   } | null>(null)
   const [showEarnModal, setShowEarnModal] = useState(false)
+  const [showVerificationModal, setShowVerificationModal] = useState(false)
+  const [verificationCleanupId, setVerificationCleanupId] = useState<string | null>(null)
+  const [verificationStatus, setVerificationStatus] = useState<{
+    status: 'pending' | 'completed' | 'failed'
+    result?: any
+  } | null>(null)
   const [hypercertEligibility, setHypercertEligibility] = useState<{
     cleanupCount: bigint
     hypercertCount: bigint
@@ -150,6 +156,65 @@ function HomeContent() {
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Check for verification modal on mount
+  useEffect(() => {
+    if (!mounted || !address) return
+
+    const showModalKey = `show_verification_modal_${address.toLowerCase()}`
+    const cleanupId = localStorage.getItem(showModalKey)
+    
+    if (cleanupId) {
+      setVerificationCleanupId(cleanupId)
+      setShowVerificationModal(true)
+      
+      // Load verification status
+      const verificationKey = `verification_status_${cleanupId}`
+      const statusData = localStorage.getItem(verificationKey)
+      if (statusData) {
+        try {
+          const parsed = JSON.parse(statusData)
+          setVerificationStatus({
+            status: parsed.status || 'pending',
+            result: parsed.result,
+          })
+        } catch (e) {
+          console.error('Failed to parse verification status:', e)
+        }
+      }
+      
+      // Clear the flag so modal doesn't show again on refresh
+      localStorage.removeItem(showModalKey)
+      
+      // Poll for verification status updates (check every 5 seconds for 2 minutes)
+      let pollCount = 0
+      const maxPolls = 24 // 2 minutes
+      const pollInterval = setInterval(() => {
+        pollCount++
+        const updatedStatus = localStorage.getItem(verificationKey)
+        if (updatedStatus) {
+          try {
+            const parsed = JSON.parse(updatedStatus)
+            if (parsed.status !== 'pending') {
+              setVerificationStatus({
+                status: parsed.status,
+                result: parsed.result,
+              })
+              clearInterval(pollInterval)
+            }
+          } catch (e) {
+            // Ignore
+          }
+        }
+        
+        if (pollCount >= maxPolls) {
+          clearInterval(pollInterval)
+        }
+      }, 5000)
+      
+      return () => clearInterval(pollInterval)
+    }
+  }, [mounted, address])
 
   // Handle referral link detection - ONLY show notification if user was actually referred (check contract)
   useEffect(() => {
@@ -1239,6 +1304,203 @@ Clean up, prove impact, earn Impact Products, build reputation, and soon vote on
           </div>
         </div>
       </main>
+
+      {/* Verification Status Modal */}
+      {showVerificationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-2xl rounded-lg border border-border bg-card p-6">
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="font-bebas text-2xl tracking-wider text-foreground">
+                Cleanup Verification
+              </h2>
+              <button
+                onClick={() => setShowVerificationModal(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {verificationCleanupId && (
+                <p className="text-sm text-muted-foreground">
+                  Submission ID: <span className="font-mono">{verificationCleanupId}</span>
+                </p>
+              )}
+              
+              {verificationStatus?.status === 'pending' && (
+                <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="h-5 w-5 animate-spin text-yellow-500" />
+                    <div>
+                      <h3 className="font-semibold text-yellow-500">Verification in Progress</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Your cleanup is being verified by our AI system. This usually takes a few minutes.
+                        You'll be notified when verification is complete.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {verificationStatus?.status === 'completed' && verificationStatus.result && (
+                <>
+                  <div className={`rounded-lg border p-4 ${
+                    verificationStatus.result.decision === 'AUTO_APPROVED'
+                      ? 'border-brand-green/50 bg-brand-green/10'
+                      : verificationStatus.result.decision === 'REJECTED'
+                      ? 'border-red-500/50 bg-red-500/10'
+                      : 'border-yellow-500/50 bg-yellow-500/10'
+                  }`}>
+                    <div className="flex items-start gap-3">
+                      {verificationStatus.result.decision === 'AUTO_APPROVED' ? (
+                        <CheckCircle className="h-5 w-5 text-brand-green mt-0.5" />
+                      ) : verificationStatus.result.decision === 'REJECTED' ? (
+                        <XCircle className="h-5 w-5 text-red-500 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-yellow-500 mt-0.5" />
+                      )}
+                      <div className="flex-1">
+                        <h3 className={`font-semibold ${
+                          verificationStatus.result.decision === 'AUTO_APPROVED'
+                            ? 'text-brand-green'
+                            : verificationStatus.result.decision === 'REJECTED'
+                            ? 'text-red-500'
+                            : 'text-yellow-500'
+                        }`}>
+                          AI Verification: {verificationStatus.result.decision === 'AUTO_APPROVED' 
+                            ? 'Approved' 
+                            : verificationStatus.result.decision === 'REJECTED'
+                            ? 'Rejected'
+                            : 'Needs Review'}
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {verificationStatus.result.decision === 'AUTO_APPROVED' 
+                            ? 'Your cleanup passed AI verification and is now pending final human review.'
+                            : verificationStatus.result.decision === 'REJECTED'
+                            ? 'AI analysis flagged potential issues. Your submission will be reviewed by a human verifier who can override this decision.'
+                            : 'AI analysis suggests manual review is needed. Your submission will be reviewed by a human verifier.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Detailed AI Analysis */}
+                  <div className="rounded-lg border border-border bg-muted/30 p-4">
+                    <h4 className="mb-3 text-sm font-semibold">🤖 AI Analysis Details</h4>
+                    <div className="grid grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Before Photo:</span>
+                        <span className="ml-2 font-mono text-foreground">
+                          {verificationStatus.result.beforeCount !== undefined 
+                            ? `${verificationStatus.result.beforeCount} objects detected`
+                            : 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">After Photo:</span>
+                        <span className="ml-2 font-mono text-foreground">
+                          {verificationStatus.result.afterCount !== undefined 
+                            ? `${verificationStatus.result.afterCount} objects detected`
+                            : 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Change:</span>
+                        <span className={`ml-2 font-mono ${
+                          verificationStatus.result.delta !== undefined && verificationStatus.result.delta > 0
+                            ? 'text-green-400'
+                            : 'text-gray-400'
+                        }`}>
+                          {verificationStatus.result.delta !== undefined 
+                            ? `${verificationStatus.result.delta > 0 ? '+' : ''}${verificationStatus.result.delta} objects`
+                            : 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Confidence Score:</span>
+                        <span className="ml-2 font-mono text-foreground">
+                          {verificationStatus.result.confidence 
+                            ? `${(verificationStatus.result.confidence * 100).toFixed(1)}%`
+                            : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                    {verificationStatus.result.reasoning && (
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-semibold">Analysis:</span> {verificationStatus.result.reasoning}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Appeal Button for Rejections */}
+                  {verificationStatus.result.decision === 'REJECTED' && (
+                    <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4">
+                      <p className="mb-3 text-sm text-muted-foreground">
+                        If you believe the AI analysis is incorrect, you can request a human review.
+                      </p>
+                      <Button
+                        onClick={() => {
+                          // Store appeal request
+                          if (verificationCleanupId) {
+                            const appealKey = `ai_appeal_${verificationCleanupId}`
+                            localStorage.setItem(appealKey, JSON.stringify({
+                              cleanupId: verificationCleanupId,
+                              timestamp: Date.now(),
+                              aiResult: verificationStatus.result,
+                            }))
+                            alert('Appeal request recorded. Your submission will be prioritized for human review.')
+                            setShowVerificationModal(false)
+                          }
+                        }}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white"
+                        size="sm"
+                      >
+                        Request Human Review
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+              
+              {verificationStatus?.status === 'failed' && (
+                <div className="rounded-lg border border-gray-500/50 bg-gray-500/10 p-4">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <h3 className="font-semibold text-gray-400">Verification Unavailable</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        AI verification is temporarily unavailable. Your cleanup will be reviewed manually by our verifiers.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="mt-4 rounded-lg border border-border bg-muted/50 p-4">
+                <h4 className="mb-2 text-sm font-semibold">What happens next?</h4>
+                <ul className="space-y-1 text-xs text-muted-foreground list-disc list-inside">
+                  <li>Your submission is being reviewed by our verifiers</li>
+                  <li>After verification, claim your Impact Product level to receive rewards (usually 2-12 hours)</li>
+                  <li>Check your profile to see submission status</li>
+                  <li>Contact us in Telegram if you have questions</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end">
+              <Button
+                onClick={() => setShowVerificationModal(false)}
+                className="bg-brand-green text-black hover:bg-[#4a9a26]"
+              >
+                Got it
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Learn More Modal */}
       {showEarnModal && (

@@ -84,6 +84,9 @@ contract Submission is Ownable, ReentrancyGuard, AccessControl {
     mapping(uint256 => CleanupSubmission) public submissions;
     mapping(address => uint256[]) public userSubmissions;
 
+    // ML Verification hash storage (off-chain verification, on-chain hash only)
+    mapping(uint256 => bytes32) public verificationHash;
+
     uint256 public submissionCount;
     uint256 public defaultRewardAmount;
 
@@ -139,6 +142,7 @@ contract Submission is Ownable, ReentrancyGuard, AccessControl {
     event ImpactFormSubmitted(address indexed user, uint256 submissionId, uint256 totalForms);
     event RecyclablesSubmitted(address indexed user, uint256 indexed submissionId, string recyclablesPhotoHash, string recyclablesReceiptHash);
     event RecyclablesRewardContractUpdated(address indexed oldContract, address indexed newContract);
+    event VerificationHashStored(uint256 indexed submissionId, bytes32 indexed verificationHash);
 
     /**
      * @dev Constructor sets up the contract with DCU token, DCURewardManager, and roles
@@ -466,5 +470,28 @@ contract Submission is Ownable, ReentrancyGuard, AccessControl {
             result[i] = submissions[startIndex + i];
         }
         return result;
+    }
+
+    /**
+     * @dev Store ML verification hash for a submission (only for admins or verifiers)
+     * This stores only the hash of the verification result, not the ML output itself
+     * @param submissionId The submission ID
+     * @param hash The SHA256 hash of the verification result JSON
+     */
+    function storeVerificationHash(uint256 submissionId, bytes32 hash) external onlyRole(VERIFIER_ROLE) {
+        if (submissionId >= submissionCount) revert SUBMISSION__SubmissionNotFound(submissionId);
+        
+        verificationHash[submissionId] = hash;
+        emit VerificationHashStored(submissionId, hash);
+    }
+
+    /**
+     * @dev Get verification hash for a submission
+     * @param submissionId The submission ID
+     * @return The verification hash (bytes32(0) if not set)
+     */
+    function getVerificationHash(uint256 submissionId) external view returns (bytes32) {
+        if (submissionId >= submissionCount) revert SUBMISSION__SubmissionNotFound(submissionId);
+        return verificationHash[submissionId];
     }
 }

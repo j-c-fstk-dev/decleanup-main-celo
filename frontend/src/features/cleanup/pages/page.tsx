@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { FeeDisplay } from '@/components/ui/fee-display'
 import { BackButton } from '@/components/layout/BackButton'
-import { Camera, Upload, ArrowRight, ArrowLeft, Check, Loader2, ExternalLink, X, Clock, AlertCircle, Users, CheckCircle } from 'lucide-react'
+import { Camera, Upload, ArrowRight, ArrowLeft, Check, Loader2, ExternalLink, X, Clock, AlertCircle, Users, CheckCircle, Sparkles } from 'lucide-react'
 import { uploadToIPFS, uploadJSONToIPFS } from '@/lib/blockchain/ipfs'
 import { submitCleanup, getSubmissionFee, attachRecyclablesToSubmission } from '@/lib/blockchain/contracts'
 import { getCleanupDetails } from '@/lib/blockchain/contracts'
@@ -79,6 +79,22 @@ function CleanupContent() {
   const [checkingPending, setCheckingPending] = useState(true)
   const [clearingPending, setClearingPending] = useState(false)
   const [feeInfo, setFeeInfo] = useState<{ fee: bigint; enabled: boolean } | null>(null)
+  const [aiVerificationStatus, setAiVerificationStatus] = useState<{
+    status: 'idle' | 'analyzing' | 'completed' | 'failed'
+    result?: {
+      decision: 'AUTO_APPROVED' | 'MANUAL_REVIEW'
+      confidence: number
+      reasoning: string
+    }
+  }>({ status: 'idle' })
+  
+  // Use ref to avoid stale closure in setInterval
+  const aiVerificationStatusRef = useRef(aiVerificationStatus)
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    aiVerificationStatusRef.current = aiVerificationStatus
+  }, [aiVerificationStatus])
 
   // Fix hydration error by only rendering after mount
   useEffect(() => {
@@ -454,7 +470,12 @@ function CleanupContent() {
         let errorMessage = 'Unable to get location.'
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            errorMessage += ' Please enable location permissions in your browser settings.'
+            // Check if it's actually an HTTPS issue
+            if (error.message && error.message.includes('secure origins')) {
+              errorMessage = '⚠️ Location requires HTTPS. The site is currently on HTTP. Using last known location or manual entry.'
+            } else {
+              errorMessage += ' Please enable location permissions in your browser settings.'
+            }
             break
           case error.POSITION_UNAVAILABLE:
             errorMessage += ' Location information is unavailable.'
@@ -463,7 +484,12 @@ function CleanupContent() {
             errorMessage += ' Location request timed out. Please try again.'
             break
           default:
-            errorMessage += ` ${error.message}`
+            // Check for HTTPS requirement in message
+            if (error.message && error.message.includes('secure origins')) {
+              errorMessage = '⚠️ Location requires HTTPS. The site is currently on HTTP. Using last known location or manual entry.'
+            } else {
+              errorMessage += ` ${error.message}`
+            }
         }
         setLocationError(errorMessage.trim())
       },
@@ -729,6 +755,29 @@ function CleanupContent() {
     try {
       // Upload photos to IPFS
       console.log('Uploading photos to IPFS...')
+      // Validate that before and after photos are different
+      if (beforePhoto.name === afterPhoto.name && beforePhoto.size === afterPhoto.size) {
+        // Check if they're actually the same file by comparing first bytes
+        const beforeBuffer = await beforePhoto.arrayBuffer()
+        const afterBuffer = await afterPhoto.arrayBuffer()
+        if (beforeBuffer.byteLength === afterBuffer.byteLength) {
+          const beforeView = new Uint8Array(beforeBuffer)
+          const afterView = new Uint8Array(afterBuffer)
+          let isSame = true
+          for (let i = 0; i < Math.min(1000, beforeView.length); i++) {
+            if (beforeView[i] !== afterView[i]) {
+              isSame = false
+              break
+            }
+          }
+          if (isSame) {
+            alert('⚠️ Warning: Before and after photos appear to be the same image. Please upload different photos for accurate verification.')
+            setIsSubmitting(false)
+            return
+          }
+        }
+      }
+
       const [beforeHash, afterHash] = await Promise.all([
         uploadToIPFS(beforePhoto).catch((error) => {
           console.error('Error uploading before photo:', error)
@@ -741,6 +790,12 @@ function CleanupContent() {
       ])
 
       console.log('Photos uploaded:', { beforeHash: beforeHash.hash, afterHash: afterHash.hash })
+      
+      // Warn if hashes are identical (same image uploaded twice)
+      if (beforeHash.hash === afterHash.hash) {
+        console.warn('⚠️ WARNING: Before and after photos have the same IPFS hash - they are identical images!')
+        alert('⚠️ Warning: Before and after photos are identical. AI verification may reject this submission. Please upload different photos.')
+      }
       console.log('Location:', { lat: location.lat, lng: location.lng })
 
       // Upload recyclables photos to IPFS if provided
@@ -848,6 +903,125 @@ function CleanupContent() {
           console.log('✅ Referral reward will be distributed when cleanup is verified and user claims their first Impact Product level!')
         }
 
+        // ML Verification (GPU-based YOLOv8) - Phase 2
+        // Run verification in background (non-blocking) - don't await
+        // Store verification status in localStorage for home page modal
+        if (typeof window !== 'undefined') {
+          const verificationKey = `verification_status_${cleanupId.toString()}`
+          localStorage.setItem(verificationKey, JSON.stringify({
+            status: 'pending',
+            cleanupId: cleanupId.toString(),
+            timestamp: Date.now(),
+          }))
+        }
+        
+        // Start verification in background (fire and forget)
+        ;(async () => {
+          try {
+            const { runMLVerification } = await import('@/lib/dmrv/ml-integration')
+            
+            console.log('[ML Verification] Starting GPU-based ML verification in background...')
+            
+            const mlResult = await runMLVerification(
+              cleanupId.toString(),
+              beforeHash.hash,
+              afterHash.hash
+            )
+            
+            if (mlResult) {
+              // Store ML result for verifier dashboard and home page
+              if (typeof window !== 'undefined') {
+                const mlKey = `ml_result_${cleanupId.toString()}`
+                const verificationKey = `verification_status_${cleanupId.toString()}`
+                
+                localStorage.setItem(mlKey, JSON.stringify({
+                  verdict: mlResult.score.verdict,
+                  score: mlResult.score.score,
+                  hash: mlResult.hash,
+                  beforeCount: mlResult.score.beforeCount,
+                  afterCount: mlResult.score.afterCount,
+                  delta: mlResult.score.delta,
+                  modelVersion: mlResult.score.modelVersion,
+                  timestamp: mlResult.score.timestamp,
+                }))
+                
+                // Update verification status with detailed AI analysis
+                const verdictMap: Record<string, 'AUTO_APPROVED' | 'MANUAL_REVIEW' | 'REJECTED'> = {
+                  'AUTO_VERIFIED': 'AUTO_APPROVED',
+                  'NEEDS_REVIEW': 'MANUAL_REVIEW',
+                  'REJECTED': 'REJECTED',
+                }
+                
+                localStorage.setItem(verificationKey, JSON.stringify({
+                  status: 'completed',
+                  cleanupId: cleanupId.toString(),
+                  result: {
+                    decision: verdictMap[mlResult.score.verdict] || 'MANUAL_REVIEW',
+                    confidence: mlResult.score.score,
+                    beforeCount: mlResult.score.beforeCount,
+                    afterCount: mlResult.score.afterCount,
+                    delta: mlResult.score.delta,
+                    modelVersion: mlResult.score.modelVersion,
+                    reasoning: `AI Analysis: ${mlResult.score.verdict}. Detected ${mlResult.score.beforeCount} objects in before photo, ${mlResult.score.afterCount} objects in after photo (change: ${mlResult.score.delta > 0 ? '+' : ''}${mlResult.score.delta}). Overall confidence: ${(mlResult.score.score * 100).toFixed(1)}%`,
+                  },
+                  timestamp: Date.now(),
+                }))
+              }
+              
+              console.log(`[ML Verification] ✅ Verification complete: ${mlResult.score.verdict} (score: ${mlResult.score.score.toFixed(3)})`)
+            } else {
+              // ML verification failed, try fallback DMRV
+              console.log('[ML Verification] GPU service unavailable, trying fallback DMRV...')
+              const { callDMRVVerification, logVerificationMetrics } = await import('@/lib/dmrv/integration')
+              
+              const dmrvResult = await callDMRVVerification(
+                cleanupId.toString(),
+                beforeHash.hash,
+                afterHash.hash,
+                location.lat,
+                location.lng,
+                Date.now()
+              )
+              
+              if (dmrvResult && typeof window !== 'undefined') {
+                logVerificationMetrics(dmrvResult)
+                
+                const verificationKey = `verification_status_${cleanupId.toString()}`
+                localStorage.setItem(verificationKey, JSON.stringify({
+                  status: 'completed',
+                  cleanupId: cleanupId.toString(),
+                  result: {
+                    decision: dmrvResult.decision,
+                    confidence: dmrvResult.confidence,
+                    reasoning: dmrvResult.analysis.reasoning,
+                  },
+                  timestamp: Date.now(),
+                }))
+              } else if (typeof window !== 'undefined') {
+                const verificationKey = `verification_status_${cleanupId.toString()}`
+                localStorage.setItem(verificationKey, JSON.stringify({
+                  status: 'failed',
+                  cleanupId: cleanupId.toString(),
+                  timestamp: Date.now(),
+                }))
+              }
+            }
+          } catch (verificationError) {
+            // Don't fail submission if verification fails - just log and continue
+            console.error('[ML/DMRV Verification] Error (non-fatal):', verificationError)
+            console.log('[ML/DMRV Verification] Submission will proceed to manual verification')
+            
+            if (typeof window !== 'undefined') {
+              const verificationKey = `verification_status_${cleanupId.toString()}`
+              localStorage.setItem(verificationKey, JSON.stringify({
+                status: 'failed',
+                cleanupId: cleanupId.toString(),
+                timestamp: Date.now(),
+              }))
+            }
+          }
+        })()
+
         // Attach recyclables to submission if provided
         // Only attach if we have a recyclables photo hash (IPFS upload succeeded)
         if (hasRecyclables && recyclablesPhotoHash && address) {
@@ -926,13 +1100,17 @@ function CleanupContent() {
         setIsSubmitting(false)
         setStep('review')
         
-        // Show success alert
-        alert(`✅ Cleanup submitted successfully!\n\nSubmission ID: ${cleanupId.toString()}\n\nYour cleanup is now pending verification. You'll be redirected to the home page.`)
+        // Store cleanup ID for home page modal
+        if (typeof window !== 'undefined' && address) {
+          const showModalKey = `show_verification_modal_${address.toLowerCase()}`
+          localStorage.setItem(showModalKey, cleanupId.toString())
+        }
         
-        // Redirect to home after 3 seconds
+        // Redirect immediately to home page (verification runs in background)
+        // Home page will show modal explaining verification process
         setTimeout(() => {
           router.push('/')
-        }, 3000)
+        }, 1500)
       } catch (submitError: any) {
         console.error('Error submitting cleanup:', submitError)
         const errorMessage = submitError?.message || submitError?.shortMessage || String(submitError) || 'Unknown error'
@@ -2183,7 +2361,7 @@ function CleanupContent() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Submitting...
+                  {aiVerificationStatus.status === 'analyzing' ? 'AI Analyzing...' : 'Submitting...'}
                 </>
               ) : (
                 <>
@@ -2193,6 +2371,16 @@ function CleanupContent() {
               )}
             </Button>
           </div>
+          
+          {/* Show AI verification status during submission */}
+          {isSubmitting && aiVerificationStatus.status === 'analyzing' && (
+            <div className="mt-4 rounded-lg border border-blue-500/50 bg-blue-500/10 p-3">
+              <div className="flex items-center gap-2 text-sm text-blue-400">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>🤖 AI is analyzing your cleanup photos...</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -2238,6 +2426,92 @@ function CleanupContent() {
                   className="h-32 w-full rounded-lg object-cover"
                 />
               </div>
+            </div>
+          )}
+
+          {/* AI Verification Status */}
+          {aiVerificationStatus.status !== 'idle' && (
+            <div className="mb-6 rounded-lg border p-4 text-left">
+              {aiVerificationStatus.status === 'analyzing' && (
+                <div className="flex items-start gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin text-blue-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h3 className="mb-1 text-sm font-semibold text-blue-400">
+                      🤖 AI Verification in Progress
+                    </h3>
+                    <p className="text-xs text-gray-300">
+                      Analyzing your cleanup photos with AI... This may take a few seconds.
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {aiVerificationStatus.status === 'completed' && aiVerificationStatus.result && (
+                <div className={`flex items-start gap-3 ${
+                  aiVerificationStatus.result.decision === 'AUTO_APPROVED' 
+                    ? 'border-green-500/50 bg-green-500/10' 
+                    : 'border-yellow-500/50 bg-yellow-500/10'
+                }`}>
+                  {aiVerificationStatus.result.decision === 'AUTO_APPROVED' ? (
+                    <CheckCircle className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" />
+                  ) : (
+                    <Clock className="h-5 w-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                  )}
+                  <div className="flex-1">
+                    <h3 className={`mb-1 text-sm font-semibold ${
+                      aiVerificationStatus.result.decision === 'AUTO_APPROVED' 
+                        ? 'text-green-400' 
+                        : 'text-yellow-400'
+                    }`}>
+                      🤖 AI Verification Complete
+                    </h3>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400">Decision:</span>
+                        <span className={`font-semibold ${
+                          aiVerificationStatus.result.decision === 'AUTO_APPROVED' 
+                            ? 'text-green-400' 
+                            : 'text-yellow-400'
+                        }`}>
+                          {aiVerificationStatus.result.decision === 'AUTO_APPROVED' 
+                            ? '✅ Auto-Approved' 
+                            : '⏳ Manual Review'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400">Confidence:</span>
+                        <span className="font-semibold text-white">
+                          {(aiVerificationStatus.result.confidence * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-gray-700">
+                        <p className="text-gray-300 text-xs leading-relaxed">
+                          {aiVerificationStatus.result.reasoning}
+                        </p>
+                      </div>
+                      {aiVerificationStatus.result.decision === 'AUTO_APPROVED' && (
+                        <p className="text-green-300 text-xs mt-2">
+                          ⚡ Your submission may be verified faster due to high AI confidence!
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {aiVerificationStatus.status === 'failed' && (
+                <div className="flex items-start gap-3 border-gray-700 bg-gray-900/50">
+                  <AlertCircle className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h3 className="mb-1 text-sm font-semibold text-gray-400">
+                      🤖 AI Verification Unavailable
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      AI verification is temporarily unavailable. Your submission will be reviewed manually by our verifiers.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

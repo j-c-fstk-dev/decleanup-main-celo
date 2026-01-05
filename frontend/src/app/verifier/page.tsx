@@ -43,6 +43,13 @@ interface CleanupSubmission {
 const VERIFIER_AUTH_MESSAGE = 'I am requesting access to the DeCleanup Verifier Dashboard. This signature proves I control this wallet address.'
 const VERIFIED_VERIFIER_KEY = 'decleanup_verified_verifier'
 
+/**
+ * Verifier System:
+ * - Current: Verifiers are whitelisted addresses with VERIFIER_ROLE in smart contract
+ * - Future: Verifiers will need to stake $cDCU tokens to become verifiers
+ *   (staking mechanism to be implemented, will replace or supplement whitelist)
+ */
+
 export default function VerifierPage() {
     const [mounted, setMounted] = useState(false)
     const { address, isConnected } = useAccount()
@@ -53,6 +60,7 @@ export default function VerifierPage() {
     const [cleanups, setCleanups] = useState<CleanupSubmission[]>([])
     const [processingId, setProcessingId] = useState<bigint | null>(null)
     const [error, setError] = useState<string | null>(null)
+    const [mlResults, setMlResults] = useState<Map<string, any>>(new Map())
 
     useEffect(() => {
         setMounted(true)
@@ -63,6 +71,17 @@ export default function VerifierPage() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [address])
+    
+    // Auto-refresh cleanups every 30 seconds when verifier is logged in
+    useEffect(() => {
+        if (!isVerifierUser || !mounted) return
+        
+        const interval = setInterval(() => {
+            fetchCleanups()
+        }, 30000) // Refresh every 30 seconds
+        
+        return () => clearInterval(interval)
+    }, [isVerifierUser, mounted])
 
     const checkStoredVerification = () => {
         if (!address) {
@@ -102,6 +121,8 @@ export default function VerifierPage() {
         setLoading(true)
         setError(null)
         try {
+            // Current: Checks VERIFIER_ROLE (whitelisted addresses)
+            // Future: Will also check $cDCU staking status
             const status = await isVerifier(addr)
             setIsVerifierUser(status)
             if (status) {
@@ -156,10 +177,37 @@ export default function VerifierPage() {
         }
     }
 
+    const fetchMLResult = async (cleanupId: string) => {
+        try {
+            // Try API first
+            const response = await fetch(`/api/ml-verification/result?cleanupId=${cleanupId}`)
+            if (response.ok) {
+                const result = await response.json()
+                if (result.hasResult !== false) {
+                    return result
+                }
+            }
+            
+            // Fallback to localStorage (client-side only)
+            if (typeof window !== 'undefined') {
+                const mlKey = `ml_result_${cleanupId}`
+                const stored = localStorage.getItem(mlKey)
+                if (stored) {
+                    return JSON.parse(stored)
+                }
+            }
+            return null
+        } catch (error) {
+            console.error(`Error fetching ML result for ${cleanupId}:`, error)
+            return null
+        }
+    }
+
     const fetchCleanups = async () => {
         try {
             const count = await getCleanupCounter()
             const submissions: CleanupSubmission[] = []
+            const mlResultsMap = new Map<string, any>()
 
             // Fetch in reverse order (newest first)
             // Submission IDs are 0-indexed, so we go from count-1 down to 0
@@ -173,12 +221,19 @@ export default function VerifierPage() {
                         submissions.push({
                             ...details
                         })
+                        
+                        // Fetch ML result for this cleanup
+                        const mlResult = await fetchMLResult(id.toString())
+                        if (mlResult) {
+                            mlResultsMap.set(id.toString(), mlResult)
+                        }
                     }
                 } catch (err) {
                     console.warn(`Failed to fetch cleanup ${id}`, err)
                 }
             }
             setCleanups(submissions)
+            setMlResults(mlResultsMap)
         } catch (error) {
             console.error('Error fetching cleanups:', error)
         }
@@ -449,9 +504,20 @@ export default function VerifierPage() {
 
                 {/* Pending Cleanups */}
                 <div className="mb-8">
-                    <h2 className="mb-4 font-bebas text-2xl uppercase tracking-wide text-foreground">
-                        Pending Verification
-                    </h2>
+                    <div className="mb-4 flex items-center justify-between">
+                        <h2 className="font-bebas text-2xl uppercase tracking-wide text-foreground">
+                            Pending Verification
+                        </h2>
+                        <Button
+                            onClick={() => {
+                                fetchCleanups()
+                            }}
+                            className="bg-brand-green text-black hover:bg-[#4a9a26]"
+                            size="sm"
+                        >
+                            Refresh
+                        </Button>
+                    </div>
                     {pendingCleanups.length === 0 ? (
                         <div className="rounded-lg border border-border bg-card p-8 text-center text-muted-foreground">
                             No pending cleanups to verify.
@@ -498,6 +564,89 @@ export default function VerifierPage() {
                                         <p className="mb-2 font-mono text-xs text-gray-400 break-all">
                                             User: {cleanup.user}
                                         </p>
+                                        {/* AI Analysis Results */}
+                                        {(() => {
+                                          const mlResult = mlResults.get(cleanup.id.toString())
+                                          if (mlResult) {
+                                            const score = mlResult.score || mlResult
+                                            const verdict = score?.verdict || mlResult.verdict
+                                            const beforeCount = score?.beforeCount ?? mlResult.beforeCount ?? 0
+                                            const afterCount = score?.afterCount ?? mlResult.afterCount ?? 0
+                                            const delta = score?.delta ?? mlResult.delta ?? 0
+                                            const confidence = score?.score ?? mlResult.score ?? 0
+                                            const hash = score?.hash || mlResult.hash
+                                            
+                                            return (
+                                              <div className="mb-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
+                                                <div className="mb-2 flex items-center justify-between">
+                                                  <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-semibold text-blue-400">🤖 AI Analysis (Step 1)</span>
+                                                    <span className={`rounded-full px-2 py-0.5 text-xs ${
+                                                      verdict === 'AUTO_VERIFIED'
+                                                        ? 'bg-green-500/20 text-green-400'
+                                                        : verdict === 'REJECTED'
+                                                        ? 'bg-red-500/20 text-red-400'
+                                                        : 'bg-yellow-500/20 text-yellow-400'
+                                                    }`}>
+                                                      {verdict === 'AUTO_VERIFIED' ? 'AI Approved' 
+                                                        : verdict === 'REJECTED' ? 'AI Rejected'
+                                                        : 'Needs Review'}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                                <div className="mb-2 text-xs text-gray-400">
+                                                  AI detected waste objects in images. Review the analysis below before making your decision.
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                                  <div>
+                                                    <span className="text-gray-400">Before Photo:</span>
+                                                    <span className="ml-1 font-mono text-white">{beforeCount} objects</span>
+                                                  </div>
+                                                  <div>
+                                                    <span className="text-gray-400">After Photo:</span>
+                                                    <span className="ml-1 font-mono text-white">{afterCount} objects</span>
+                                                  </div>
+                                                  <div>
+                                                    <span className="text-gray-400">Change (Δ):</span>
+                                                    <span className={`ml-1 font-mono ${
+                                                      delta > 0 ? 'text-green-400' : delta < 0 ? 'text-red-400' : 'text-gray-400'
+                                                    }`}>
+                                                      {delta > 0 ? '+' : ''}{delta}
+                                                    </span>
+                                                  </div>
+                                                  <div>
+                                                    <span className="text-gray-400">Confidence:</span>
+                                                    <span className="ml-1 font-mono text-white">
+                                                      {(confidence * 100).toFixed(1)}%
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                                {hash && (
+                                                  <div className="mt-2 pt-2 border-t border-blue-500/20">
+                                                    <span className="text-xs text-gray-400">Verification Hash: </span>
+                                                    <span className="font-mono text-xs text-gray-300 break-all">
+                                                      {hash.slice(0, 16)}...
+                                                    </span>
+                                                  </div>
+                                                )}
+                                                <div className="mt-2 pt-2 border-t border-blue-500/20">
+                                                  <p className="text-xs text-gray-400">
+                                                    <span className="font-semibold">Note:</span> This is AI analysis only. 
+                                                    You can override the AI decision based on your review of the photos.
+                                                  </p>
+                                                </div>
+                                              </div>
+                                            )
+                                          }
+                                          return (
+                                            <div className="mb-3 rounded-lg border border-gray-500/30 bg-gray-500/10 p-3">
+                                              <div className="text-xs text-gray-400">
+                                                🤖 AI analysis not available (may still be processing or was not performed)
+                                              </div>
+                                            </div>
+                                          )
+                                        })()}
+                                        
                                         {/* Additional info badges */}
                                         <div className="mb-3 flex flex-wrap gap-1">
                                             {cleanup.hasImpactForm && (
