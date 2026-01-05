@@ -107,23 +107,12 @@ The DeCleanup Network uses YOLOv8 (You Only Look Once version 8), a state-of-the
 - **detect-waste**: https://huggingface.co/Yorai/detect-waste (Non-profit oriented, eco-focused)
 - **waste-detection**: https://huggingface.co/sharktide/waste-detection (Simple, effective)
 
-**See Also:**
-- [GPU Inference Service README](gpu-inference-service/README.md) – Detailed setup and API documentation
-- [ML Verification Architecture](docs/ML_VERIFICATION_ARCHITECTURE.md) – System architecture details
-- [DMRV Complete Guide](docs/DMRV_COMPLETE_GUIDE.md) – Complete integration guide
-
 ## 📚 Documentation
 
 - **[System Architecture](docs/system-architecture.md)** – Complete end-to-end diagram of frontend/client, contracts, IPFS interactions, and data flow
 - **[Deployment Plan](docs/deployment-plan.md)** – Step-by-step deployment guide with environment setup and post-deployment configuration
 - **[Recyclables Module](docs/recyclables-module.md)** – cRECY reserve requirements, Submission hook, and reserve sync checklist
 - **[Hypercerts & Impact](docs/hypercerts-and-impact.md)** – Future implementation guide for Hypercert aggregation and rewards (currently postponed)
-
-### ML Verification Docs
-
-- **[DMRV Complete Guide](docs/DMRV_COMPLETE_GUIDE.md)** ⭐ – **Complete step-by-step integration guide (START HERE)**
-- **[ML Verification Architecture](docs/ML_VERIFICATION_ARCHITECTURE.md)** – System architecture details
-- **[Partnership Opportunities](docs/PARTNERSHIP_OPPORTUNITIES.md)** – Potential partners and development branches
 
 ## 🚀 Deployment Status
 

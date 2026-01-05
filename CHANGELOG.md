@@ -6,6 +6,69 @@ This project adheres to Semantic Versioning.
 
 ---
 
+## [AI Verification with YOLOv8 on TACO Dataset] – 2026-01-05
+
+This release implements Phase-2 DMRV (Digital Measurement, Reporting, and Verification) with AI-assisted verification using YOLOv8 waste detection fine-tuned on the TACO dataset.
+
+### 🤖 ML Verification (DMRV) - Phase 2
+
+**Added**
+- GPU Inference Service (`gpu-inference-service/`) - FastAPI-based service running YOLOv8 for waste detection
+  - YOLOv8 fine-tuned on TACO dataset (60+ waste categories)
+  - REST API for inference requests with shared secret authentication
+  - Health check endpoint for monitoring
+  - Confidence threshold: 0.15 (optimized for better detection)
+- ML Verification Pipeline - Complete AI verification workflow
+  - Automated verification scoring (AUTO_VERIFIED/NEEDS_REVIEW/REJECTED)
+  - Before/after photo comparison with object count delta calculation
+  - Weighted scoring algorithm (40% confidence, 60% trash reduction)
+  - On-chain hash storage for immutable audit trail
+- Frontend AI Integration
+  - AI verification results displayed to users in modal
+  - Detailed AI analysis metrics (object counts, delta, confidence scores)
+  - User appeal/complaint option for rejected submissions
+  - Verifier dashboard with AI analysis display and auto-refresh
+- Duplicate Image Detection - Validates before upload if same image is used for both before/after photos
+- Enhanced Logging - Detailed object detection information for debugging
+
+**Changed**
+- Lowered confidence threshold from 0.25 to 0.15 for better object detection
+- Improved AI scoring algorithm to be more lenient for legitimate cleanups
+- Enhanced location error handling with better HTTPS requirement messaging
+- Updated verification workflow to show AI results before human review
+
+**Fixed**
+- Location geolocation error handling for HTTPS requirement
+- AI verification not detecting objects in legitimate cleanup photos
+- Submissions not appearing in verifier cabinet after AI review
+- Same image uploaded twice causing false rejections
+
+**Documentation**
+- Added comprehensive YOLOv8 on TACO Dataset integration explanation in README
+- Created verification workflow documentation
+- Some docs fixes
+
+### 📊 Statistics
+
+- Total files changed: 38 files
+- Lines added: ~5,624
+- Lines removed: ~155
+- Net change: +5,469 lines
+- New services: GPU Inference Service (Python FastAPI)
+- New API routes: 3 (ML verification endpoints)
+
+### ✅ Key Achievements
+
+- ✅ Implemented complete AI verification pipeline
+- ✅ GPU service running on systemd with YOLOv8 model
+- ✅ Automated verification scoring with three-tier verdict system
+- ✅ On-chain hash storage for audit trail
+- ✅ User-facing AI analysis results
+- ✅ Verifier dashboard with AI metrics
+- ✅ Duplicate image detection and validation
+
+---
+
 ## [Celo Sepolia Deployment & Integration] – 2025-12-16
 
 This release focuses on deploying the RecyclablesReward contract to Celo Sepolia, implementing the full submission flow with contract integration, and enhancing the verifier dashboard with proper access control and data display.
