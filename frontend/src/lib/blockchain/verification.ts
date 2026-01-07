@@ -379,6 +379,24 @@ export async function getUserCleanupStatus(user: Address): Promise<{
   level?: number
   reason?: string
 }> {
+  // Check user level first - if level 10, cannot submit more cleanups
+  let userLevel = 0
+  try {
+    const { getUserLevel } = await import('./contracts')
+    userLevel = await getUserLevel(user)
+  } catch (error) {
+    console.warn('[verification] Could not fetch user level:', error)
+  }
+
+  if (userLevel >= 10) {
+    return {
+      hasPendingCleanup: false,
+      canSubmit: false,
+      canClaim: false,
+      reason: 'You have reached the maximum level (10). No more cleanups can be submitted at this time.',
+    }
+  }
+
   const latest = await getLatestCleanupStatus(user)
 
   if (!latest) {

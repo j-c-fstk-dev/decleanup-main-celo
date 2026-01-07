@@ -506,8 +506,8 @@ export default function VerifierPage() {
                 <div className="mb-8">
                     <div className="mb-4 flex items-center justify-between">
                         <h2 className="font-bebas text-2xl uppercase tracking-wide text-foreground">
-                            Pending Verification
-                        </h2>
+                        Pending Verification
+                    </h2>
                         <Button
                             onClick={() => {
                                 fetchCleanups()

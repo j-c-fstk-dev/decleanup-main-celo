@@ -474,7 +474,7 @@ function CleanupContent() {
             if (error.message && error.message.includes('secure origins')) {
               errorMessage = '⚠️ Location requires HTTPS. The site is currently on HTTP. Using last known location or manual entry.'
             } else {
-              errorMessage += ' Please enable location permissions in your browser settings.'
+            errorMessage += ' Please enable location permissions in your browser settings.'
             }
             break
           case error.POSITION_UNAVAILABLE:
@@ -488,7 +488,7 @@ function CleanupContent() {
             if (error.message && error.message.includes('secure origins')) {
               errorMessage = '⚠️ Location requires HTTPS. The site is currently on HTTP. Using last known location or manual entry.'
             } else {
-              errorMessage += ` ${error.message}`
+            errorMessage += ` ${error.message}`
             }
         }
         setLocationError(errorMessage.trim())

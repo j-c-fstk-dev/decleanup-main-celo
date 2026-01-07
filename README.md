@@ -7,7 +7,7 @@ This repository contains the complete smart contract infrastructure and frontend
 
 ## 🎯 Milestone: Core Contracts Deployment (Testnet) & Hypercerts MVP
 
-This milestone delivers the core infrastructure for DeCleanup Network, including deployment of smart contracts and integration of the cleanup submission mechanism. **Note**: Hypercerts integration has been intentionally postponed for future work once rewards and submissions are fully stable. The frontend includes helper code for image generation and metadata, but Hypercert minting is not wired into the live flow.
+This milestone delivers the core infrastructure for DeCleanup Network, including deployment of smart contracts and integration of the cleanup submission mechanism. **Hypercerts integration is now implemented** - users can mint Impact Certificates after completing every 10 verified cleanups. See [Hypercerts Integration Status](docs/HYPERCERTS_STATUS.md) for detailed implementation status.
 
 ### ✅ Completed
 
@@ -112,7 +112,8 @@ The DeCleanup Network uses YOLOv8 (You Only Look Once version 8), a state-of-the
 - **[System Architecture](docs/system-architecture.md)** – Complete end-to-end diagram of frontend/client, contracts, IPFS interactions, and data flow
 - **[Deployment Plan](docs/deployment-plan.md)** – Step-by-step deployment guide with environment setup and post-deployment configuration
 - **[Recyclables Module](docs/recyclables-module.md)** – cRECY reserve requirements, Submission hook, and reserve sync checklist
-- **[Hypercerts & Impact](docs/hypercerts-and-impact.md)** – Future implementation guide for Hypercert aggregation and rewards (currently postponed)
+- **[Hypercerts Integration Status](docs/HYPERCERTS_STATUS.md)** – Current implementation status, what's working, what's failing, and what needs to be done
+- **[Hypercerts Integration Plan](docs/HYPERCERTS_INTEGRATION_PLAN.md)** – Original implementation plan and architecture
 
 ## 🚀 Deployment Status
 
