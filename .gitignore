@@ -50,6 +50,20 @@ web_modules/
 # Optional npm cache directory
 .npm
 
+# Hardhat / Solidity build output
+artifacts/
+cache/
+artifacts/build-info/
+typechain-types/
+
+# Next.js build output
+frontend/.next/
+frontend/out/
+
+# Local logs
+_milestone2_logs/
+
+
 # Optional eslint cache
 .eslintcache
 
