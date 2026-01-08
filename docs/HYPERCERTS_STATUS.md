@@ -90,6 +90,10 @@
 - `https://gateway.pinata.cloud/ipfs/bafybe...`
 - Just `bafybe...`
 
+**Current Error**: URLs like `ipfs.io/ipfs/https://gateway.pinata.cloud/ipfs/...` (double URL)  
+**Root Cause**: Hash extraction not working correctly - needs to extract CID from full URL  
+**Fix Status**: Code updated, needs to be synced and rebuilt
+
 ### 2. Wallet Connection Error
 **Status**: Needs user action  
 **Error**: `Could not connect to wallet; sending transactions not allowed`  
@@ -101,32 +105,34 @@
 - Verify correct network (Celo Sepolia)
 - Try disconnecting and reconnecting wallet
 
-### 3. Cleanup Count Mismatch
+### 3. Cleanup Count Mismatch ✅ FIXED
 **Status**: Fixed in latest code  
 **Issue**: User has level 10 but only 5 cleanups found (due to contract redeploys)  
 **Fix**: Now uses Impact Product level as source of truth:
 - If user has level 10, uses available cleanups (even if < 10)
 - Only requires exactly 10 cleanups if user doesn't have level 10 yet
 
-### 4. File Sync Issues
-**Status**: Deployment issue  
+### 4. File Sync Issues ⚠️ CRITICAL
+**Status**: Deployment issue - **BLOCKING ALL FIXES**  
 **Issue**: Changes not appearing on server  
 **Cause**: Files not synced or build cache stale  
 **Solution**: 
-- Sync all files individually
+- Sync all files individually (connection keeps closing)
 - Delete `.next` folder before rebuild
 - Clear browser cache
+- Verify files are actually on server after sync
 
 ---
 
 ## ❌ What's Not Working / Needs Fixing
 
-### 1. Duplicate Hypercert Button
-**Status**: Should be fixed, but user reports still seeing two  
+### 1. Duplicate Hypercert Button ⚠️
+**Status**: Code has only one button, but user reports seeing two  
 **Possible Causes**:
 - Browser cache showing old JavaScript
 - Files not synced to server
 - Build not updated
+- Old code still running
 
 **Verification**:
 ```bash
@@ -135,12 +141,15 @@ grep -c "hypercertEligibility?.isEligible" src/app/page.tsx
 # Should return 1
 ```
 
-### 2. Submit Button Still Active at Level 10
-**Status**: Should be fixed, but user reports still active  
+**Action**: Force browser cache clear, verify build timestamp
+
+### 2. Submit Button Still Active at Level 10 ⚠️
+**Status**: Code has level 10 check, but user reports still active  
 **Possible Causes**:
-- `verification.ts` not synced
+- `verification.ts` not synced to server
 - `getUserLevel()` returning incorrect value
 - Browser cache
+- Build not updated
 
 **Verification**:
 ```bash
@@ -148,11 +157,23 @@ grep -c "hypercertEligibility?.isEligible" src/app/page.tsx
 grep -n "userLevel >= 10" src/lib/blockchain/verification.ts
 ```
 
-### 3. Console Log Noise
-**Status**: Should be reduced, but user reports still noisy  
+**Action**: Sync `verification.ts`, rebuild, clear cache
+
+### 3. Console Log Noise ⚠️
+**Status**: Code has reduced logging, but user reports still noisy  
 **Possible Causes**:
-- `contracts.ts` not synced
+- `contracts.ts` not synced to server
 - Old JavaScript cached in browser
+- Build not updated
+
+**Action**: Sync `contracts.ts`, rebuild, clear cache
+
+### 4. IPFS URL Construction Error 🔴
+**Status**: Currently failing  
+**Error**: `ipfs.io/ipfs/https://gateway.pinata.cloud/ipfs/...` (malformed URLs)  
+**Root Cause**: Hash extraction not working - full URLs being passed instead of CIDs  
+**Fix**: Code updated in `hypercerts-minting.ts` with `extractIPFSHash()` function  
+**Action**: Sync `hypercerts-minting.ts`, rebuild, test
 
 ---
 
