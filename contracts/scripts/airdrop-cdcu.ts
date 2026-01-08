@@ -1,8 +1,9 @@
-import { ethers } from "hardhat";
-import { getContractAt } from "@nomicfoundation/hardhat-viem";
+import hardhat from "hardhat";
 
 async function main() {
   console.log("Starting cDCU airdrop...");
+
+  const { ethers } = hardhat as any;
 
   // Get the deployed DCUToken address from environment or config
   const dcuTokenAddress = process.env.DCU_TOKEN_ADDRESS;
@@ -12,19 +13,23 @@ async function main() {
 
   // Airdrop recipients - V1 users and testnet participants
   const recipients = [
-    // V1 users
+    // V1 users - replace with actual addresses
     { address: "0x...", amount: ethers.parseEther("100") },
     // Add more addresses as needed
   ];
 
-  const dcuToken = await getContractAt("DCUToken", dcuTokenAddress);
+  // Get contract instance
+  const DCUToken = await ethers.getContractFactory("DCUToken");
+  const dcuToken = DCUToken.attach(dcuTokenAddress);
 
   console.log(`Airdropping to ${recipients.length} recipients...`);
 
   for (const recipient of recipients) {
     console.log(`Airdropping ${ethers.formatEther(recipient.amount)} cDCU to ${recipient.address}`);
     // Since script runs as deployer who has MINTER_ROLE, can mint directly
-    await dcuToken.write.mint([recipient.address, recipient.amount]);
+    const tx = await dcuToken.mint(recipient.address, recipient.amount);
+    await tx.wait();
+    console.log(`✅ Airdropped to ${recipient.address}`);
   }
 
   console.log("Airdrop completed successfully!");
