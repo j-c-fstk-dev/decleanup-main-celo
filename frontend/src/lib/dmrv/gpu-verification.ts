@@ -62,9 +62,10 @@ export async function callGPUInference(
   // GPU service will skip validation if SHARED_SECRET is empty
   if (sharedSecret) {
     headers['Authorization'] = `Bearer ${sharedSecret}`
-    console.log(`[GPU Verification] Using authorization for ${phase} image`)
+    console.log(`[GPU Verification] Using authorization for ${phase} image (secret length: ${sharedSecret.length})`)
   } else {
-    console.warn(`[GPU Verification] ⚠️ GPU_SHARED_SECRET not set. GPU service must not require auth, or this will fail.`)
+    console.warn(`[GPU Verification] ⚠️ GPU_SHARED_SECRET not set or empty. GPU service must not require auth, or this will fail.`)
+    console.warn(`[GPU Verification] Check: process.env.GPU_SHARED_SECRET = ${process.env.GPU_SHARED_SECRET ? 'SET' : 'NOT SET'}`)
   }
   
   try {

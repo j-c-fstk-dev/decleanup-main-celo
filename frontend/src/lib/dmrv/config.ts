@@ -6,6 +6,10 @@
 import { DMRVConfig } from './types'
 
 export function getDMRVConfig(): DMRVConfig {
+  // Default to 'mock' if HuggingFace is not explicitly configured
+  // This prevents 410 errors from deprecated HuggingFace models
+  const modelProvider = process.env.DMRV_MODEL_PROVIDER || 'mock'
+  
   return {
     // Confidence thresholds (0-1 scale)
     autoApproveThreshold: parseFloat(
@@ -16,7 +20,10 @@ export function getDMRVConfig(): DMRVConfig {
     ),
     
     // Model provider: 'huggingface' | 'local' | 'mock'
-    modelProvider: (process.env.DMRV_MODEL_PROVIDER || 'mock') as 'huggingface' | 'local' | 'mock',
+    // Default to 'mock' to avoid HuggingFace API issues
+    modelProvider: (modelProvider === 'huggingface' && process.env.HUGGINGFACE_API_KEY) 
+      ? 'huggingface' 
+      : 'mock' as 'huggingface' | 'local' | 'mock',
     // Recommended models:
     // - FathomNet/trash-detector (object detection, best for waste detection)
     // - prithivMLmods/Trash-Net (image classification)
