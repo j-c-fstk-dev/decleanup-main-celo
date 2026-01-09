@@ -970,52 +970,30 @@ function CleanupContent() {
               
               console.log(`[ML Verification] ✅ Verification complete: ${mlResult.score.verdict} (score: ${mlResult.score.score.toFixed(3)})`)
             } else {
-              // ML verification failed, try fallback DMRV
-              console.log('[ML Verification] GPU service unavailable, trying fallback DMRV...')
-              const { callDMRVVerification, logVerificationMetrics } = await import('@/lib/dmrv/integration')
+              // ML verification failed - verifiers will handle it manually
+              console.warn('[ML Verification] GPU service unavailable. Submission will be reviewed by verifiers manually.')
               
-              const dmrvResult = await callDMRVVerification(
-                cleanupId.toString(),
-                beforeHash.hash,
-                afterHash.hash,
-                location.lat,
-                location.lng,
-                Date.now()
-              )
-              
-              if (dmrvResult && typeof window !== 'undefined') {
-                logVerificationMetrics(dmrvResult)
-                
+              if (typeof window !== 'undefined') {
                 const verificationKey = `verification_status_${cleanupId.toString()}`
                 localStorage.setItem(verificationKey, JSON.stringify({
-                  status: 'completed',
+                  status: 'pending_manual_review',
                   cleanupId: cleanupId.toString(),
-                  result: {
-                    decision: dmrvResult.decision,
-                    confidence: dmrvResult.confidence,
-                    reasoning: dmrvResult.analysis.reasoning,
-                  },
-                  timestamp: Date.now(),
-                }))
-              } else if (typeof window !== 'undefined') {
-                const verificationKey = `verification_status_${cleanupId.toString()}`
-                localStorage.setItem(verificationKey, JSON.stringify({
-                  status: 'failed',
-                  cleanupId: cleanupId.toString(),
+                  reason: 'GPU service unavailable - awaiting manual verification',
                   timestamp: Date.now(),
                 }))
               }
             }
           } catch (verificationError) {
-            // Don't fail submission if verification fails - just log and continue
-            console.error('[ML/DMRV Verification] Error (non-fatal):', verificationError)
-            console.log('[ML/DMRV Verification] Submission will proceed to manual verification')
+            // Don't fail submission if verification fails - verifiers will handle it
+            console.error('[ML Verification] Error (non-fatal):', verificationError)
+            console.log('[ML Verification] Submission will proceed to manual verification by verifiers')
             
             if (typeof window !== 'undefined') {
               const verificationKey = `verification_status_${cleanupId.toString()}`
               localStorage.setItem(verificationKey, JSON.stringify({
-                status: 'failed',
+                status: 'pending_manual_review',
                 cleanupId: cleanupId.toString(),
+                reason: 'ML verification error - awaiting manual verification',
                 timestamp: Date.now(),
               }))
             }
