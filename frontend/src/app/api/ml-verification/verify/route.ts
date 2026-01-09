@@ -15,6 +15,17 @@ import { runFullVerification, hashVerificationResult } from '@/lib/dmrv/gpu-veri
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads')
 const PUBLIC_URL_BASE = process.env.PUBLIC_URL_BASE || 'http://localhost:3000'
 const GPU_SERVICE_URL = process.env.GPU_INFERENCE_SERVICE_URL || 'http://localhost:8000'
+const GPU_SHARED_SECRET = process.env.GPU_SHARED_SECRET || ''
+
+// Log configuration on startup (for debugging)
+if (process.env.NODE_ENV !== 'production' || process.env.DEBUG === 'true') {
+  console.log('[ML Verification] Configuration:', {
+    gpuServiceUrl: GPU_SERVICE_URL,
+    hasSharedSecret: !!GPU_SHARED_SECRET,
+    uploadDir: UPLOAD_DIR,
+    publicUrlBase: PUBLIC_URL_BASE,
+  })
+}
 
 /**
  * Store photo on VPS filesystem

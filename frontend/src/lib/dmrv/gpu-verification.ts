@@ -58,8 +58,13 @@ export async function callGPUInference(
     'Content-Type': 'application/json',
   }
   
+  // Always include Authorization header if secret is configured
+  // GPU service will skip validation if SHARED_SECRET is empty
   if (sharedSecret) {
     headers['Authorization'] = `Bearer ${sharedSecret}`
+    console.log(`[GPU Verification] Using authorization for ${phase} image`)
+  } else {
+    console.warn(`[GPU Verification] ⚠️ GPU_SHARED_SECRET not set. GPU service must not require auth, or this will fail.`)
   }
   
   try {
@@ -71,6 +76,16 @@ export async function callGPUInference(
     
     if (!response.ok) {
       const errorText = await response.text()
+      
+      // Provide helpful error message for 401 errors
+      if (response.status === 401) {
+        console.error(`[GPU Verification] Authorization failed (401). Check:`)
+        console.error(`  1. GPU service has SHARED_SECRET set: ${gpuServiceUrl}`)
+        console.error(`  2. Frontend has GPU_SHARED_SECRET set: ${sharedSecret ? 'SET' : 'NOT SET'}`)
+        console.error(`  3. Secrets match between frontend and GPU service`)
+        throw new Error(`GPU service requires authorization. Set GPU_SHARED_SECRET in .env.local to match GPU service's SHARED_SECRET. Error: ${errorText}`)
+      }
+      
       throw new Error(`GPU inference failed: ${response.status} ${errorText}`)
     }
     
