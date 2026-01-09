@@ -124,10 +124,13 @@ function HomeContent() {
     result?: any
   } | null>(null)
   const [hypercertEligibility, setHypercertEligibility] = useState<{
-    cleanupCount: bigint
     hypercertCount: bigint
     isEligible: boolean
+    currentLevel: number
+    cleanupsUntilNext: number
   } | null>(null)
+  const [mintingHypercert, setMintingHypercert] = useState(false)
+  const [mintingStep, setMintingStep] = useState<string>('')
   const [dcuBalance, setDcuBalance] = useState<bigint>(BigInt(0))
   const [crecyBalance, setCrecyBalance] = useState<number>(0)
   const [showBreakdown, setShowBreakdown] = useState(false)
@@ -149,7 +152,6 @@ function HomeContent() {
     impactValue: null as string | null,
     dcuReward: null as string | null,
   })
-  const [mintingHypercert, setMintingHypercert] = useState(false)
   const [isClaiming, setIsClaiming] = useState(false)
   const [claimFeeInfo, setClaimFeeInfo] = useState<{ fee: bigint; enabled: boolean } | null>(null)
 
@@ -391,7 +393,13 @@ function HomeContent() {
           console.log('[Home] No cleanup status - clearing')
           setCleanupStatus(null)
         }
-        setHypercertEligibility(eligibility)
+        // Map eligibility to match expected state structure
+        setHypercertEligibility({
+          hypercertCount: eligibility.hypercertCount,
+          isEligible: eligibility.isEligible,
+          currentLevel: eligibility.currentLevel,
+          cleanupsUntilNext: eligibility.cleanupsUntilNext,
+        })
         setDcuBalance(balance)
         
         // Calculate breakdown from reward stats
@@ -685,33 +693,103 @@ function HomeContent() {
 
     checkStatus()
     
-    // Poll for status updates every 10 seconds to catch verification changes
-    const interval = setInterval(checkStatus, 10000)
+    // Only poll for status updates if there's a pending cleanup (not verified yet)
+    // Once verified/claimed, stop polling to reduce unnecessary updates
+    let interval: NodeJS.Timeout | null = null
     
-    return () => clearInterval(interval)
+    // Start polling after initial check - only if there's a pending cleanup
+    const startPollingIfNeeded = async () => {
+      try {
+        const currentStatus = await getUserCleanupStatus(address)
+        // Only poll if there's a pending cleanup that's not yet claimable
+        // This means cleanup is submitted but not yet verified
+        if (currentStatus?.hasPendingCleanup && !currentStatus.canClaim) {
+          interval = setInterval(async () => {
+            // Check status on each poll and stop if cleanup is verified/claimed
+            const status = await getUserCleanupStatus(address)
+            if (!status || !status.hasPendingCleanup || status.canClaim) {
+              if (interval) {
+                clearInterval(interval)
+                interval = null
+              }
+              return
+            }
+            // Update status
+            checkStatus()
+          }, 30000) // Poll every 30 seconds instead of 10
+        }
+      } catch (error) {
+        // Silently fail - don't poll if check fails
+        console.warn('[Polling] Failed to check status for polling decision:', error)
+      }
+    }
+    
+    // Start polling check after initial status load (2 second delay)
+    const timeoutId = setTimeout(startPollingIfNeeded, 2000)
+    
+    return () => {
+      clearTimeout(timeoutId)
+      if (interval) {
+        clearInterval(interval)
+      }
+    }
   }, [mounted, isConnected, address])
 
   const handleMintHypercert = async () => {
     if (!address || !hypercertEligibility?.isEligible) return
 
     setMintingHypercert(true)
+    setMintingStep('Aggregating cleanup data...')
+
     try {
       const hypercertNumber = Number(hypercertEligibility.hypercertCount) + 1
 
+      // Step 1: Aggregate data
+      setMintingStep('Aggregating cleanup data...')
+      
+      // Step 2: Generate images
+      setMintingStep('Generating images...')
+      
+      // Step 3: Upload metadata
+      setMintingStep('Uploading metadata to IPFS...')
+      
+      // Step 4: Mint Hypercert
+      setMintingStep('Minting Hypercert on-chain...')
       const result = await mintHypercert(address, hypercertNumber)
 
+      // Step 5: Claim reward
+      setMintingStep('Claiming reward...')
+      try {
+        const { claimHypercertReward } = await import('@/lib/blockchain/contracts')
+        await claimHypercertReward(BigInt(hypercertNumber))
+        console.log('[Hypercert] Reward claimed successfully')
+      } catch (rewardError) {
+        // Don't fail the flow if reward claiming fails
+        console.warn('[Hypercert] Reward claiming failed (non-critical):', rewardError)
+      }
+
+      // Success message with link to hypercerts.org
+      const hypercertsViewUrl = `https://hypercerts.org/app/view/${result.txHash}`
+      const blockExplorerUrl = `${process.env.NEXT_PUBLIC_BLOCK_EXPLORER_URL || 'https://celoscan.io'}/tx/${result.txHash}`
+
       const message =
-        `✅ Hypercert eligibility registered successfully!\n\n` +
+        `✅ Hypercert minted successfully!\n\n` +
         `Transaction: ${result.txHash}\n` +
         `Hypercert ID: ${result.hypercertId}\n` +
-        `Owner: ${result.owner}\n\n` +
-        `ℹ️ Hypercert metadata & claiming will be enabled in a future milestone.`
+        `Metadata: ${result.metadataUri}\n\n` +
+        `View on Hypercerts: ${hypercertsViewUrl}\n` +
+        `View on Block Explorer: ${blockExplorerUrl}`
 
       alert(message)
 
       // Refresh eligibility
       const newEligibility = await getHypercertEligibility(address)
-      setHypercertEligibility(newEligibility)
+      setHypercertEligibility({
+        hypercertCount: newEligibility.hypercertCount,
+        isEligible: newEligibility.isEligible,
+        currentLevel: newEligibility.currentLevel,
+        cleanupsUntilNext: newEligibility.cleanupsUntilNext,
+      })
     } catch (error) {
       console.error('Error minting hypercert:', error)
 
@@ -726,12 +804,17 @@ function HomeContent() {
           errorMessage = 'Failed to upload metadata. Please try again in a moment.'
         } else if (errorMessage.includes('transaction') || errorMessage.includes('wallet')) {
           errorMessage = 'Transaction failed. Please check your wallet and try again.'
+        } else if (errorMessage.includes('No verified cleanups')) {
+          errorMessage = 'You need 10 verified cleanups to mint a Hypercert. Please complete more cleanups first.'
+        } else if (errorMessage.includes('Only')) {
+          errorMessage = 'You need exactly 10 verified cleanups to mint a Hypercert.'
         }
       }
 
       alert(`❌ Failed to mint hypercert:\n\n${errorMessage}\n\nPlease try again or contact support if the issue persists.`)
     } finally {
       setMintingHypercert(false)
+      setMintingStep('')
     }
   }
 
@@ -940,6 +1023,70 @@ function HomeContent() {
                 </div>
               </div>
 
+              {/* Hypercert Mint Section - Show when eligible */}
+              {hypercertEligibility?.isEligible && (
+                <div className="mb-4 rounded-lg border-2 border-brand-yellow/50 bg-brand-yellow/10 p-4">
+                  <div className="flex items-start gap-3 mb-3">
+                    <Award className="h-5 w-5 text-brand-yellow flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="font-bebas text-lg tracking-wider text-brand-yellow mb-1">
+                        HYPERCERT ELIGIBLE
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        You've reached level {hypercertEligibility.currentLevel}! Mint your Impact Certificate to claim your 10 $cDCU bonus.{' '}
+                        <a 
+                          href="https://hypercerts.org" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-brand-yellow hover:underline"
+                        >
+                          Learn more about Hypercerts
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleMintHypercert}
+                    disabled={mintingHypercert || !hypercertEligibility.isEligible}
+                    className="w-full gap-2 bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bebas tracking-wider"
+                  >
+                    {mintingHypercert ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {mintingStep || 'Minting...'}
+                      </>
+                    ) : (
+                      <>
+                        <Award className="h-4 w-4" />
+                        MINT HYPERCERT #{Number(hypercertEligibility.hypercertCount) + 1}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {/* Hypercert Progress - Show when not eligible but has progress */}
+              {hypercertEligibility && !hypercertEligibility.isEligible && hypercertEligibility.currentLevel && hypercertEligibility.currentLevel > 0 && (
+                <div className="mb-4 rounded-lg border border-brand-yellow/30 bg-brand-yellow/5 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Hypercert Progress
+                    </span>
+                    <span className="text-xs text-brand-yellow">
+                      {hypercertEligibility.cleanupsUntilNext || 10} cleanups until next Hypercert
+                    </span>
+                  </div>
+                  <div className="w-full bg-background/50 rounded-full h-2">
+                    <div
+                      className="bg-brand-yellow h-2 rounded-full transition-all"
+                      style={{
+                        width: `${((10 - (hypercertEligibility.cleanupsUntilNext || 10)) / 10) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Expandable Breakdown */}
               <button
                 onClick={() => setShowBreakdown(!showBreakdown)}
@@ -1013,29 +1160,6 @@ function HomeContent() {
             </Link>
               )}
 
-            {hypercertEligibility?.isEligible && (
-                <div className="rounded-xl border border-brand-yellow/30 bg-brand-yellow/10 p-4">
-                  <Heart className="h-5 w-5 text-brand-yellow mb-2" />
-                  <h3 className="font-bebas text-sm tracking-wider text-foreground mb-1">
-                    HYPERCERT
-                  </h3>
-                <Button
-                  onClick={handleMintHypercert}
-                  disabled={mintingHypercert}
-                    size="sm"
-                    className="w-full gap-1 bg-brand-yellow text-black hover:bg-brand-yellow/90 disabled:opacity-50 h-7 text-xs"
-                >
-                  {mintingHypercert ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <>
-                        <Heart className="h-3 w-3" />
-                        MINT
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
             </div>
 
             {/* Invite Friends */}
@@ -1192,7 +1316,13 @@ Clean up, prove impact, earn Impact Products, build reputation, and soon vote on
                         // After claiming, status should be null or canClaim should be false
                         // This prevents showing claim button for other cleanups immediately after claiming
                         setCleanupStatus(status)
-                        setHypercertEligibility(eligibility)
+                        // Map eligibility to match expected state structure
+                        setHypercertEligibility({
+                          hypercertCount: eligibility.hypercertCount,
+                          isEligible: eligibility.isEligible,
+                          currentLevel: eligibility.currentLevel,
+                          cleanupsUntilNext: eligibility.cleanupsUntilNext,
+                        })
                         
                         // Refresh reward stats to show updated breakdown (cleanupsDCU should now show 10)
                         console.log('[Home] Refreshing reward stats to see updated breakdown...')

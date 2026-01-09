@@ -1,4 +1,4 @@
-import { Address } from 'viem'
+import { Address, Hash } from 'viem'
 import { readContract, writeContract, getAccount, waitForTransactionReceipt, getPublicClient } from '@wagmi/core'
 import { config } from './wagmi'
 import { REQUIRED_BLOCK_EXPLORER_URL, CONTRACT_ADDRESSES } from './wagmi'
@@ -197,6 +197,13 @@ const SUBMISSION_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'user', type: 'address' }],
     outputs: [{ name: '', type: 'uint256[]' }],
+  },
+  {
+    type: 'function',
+    name: 'userHypercertCount',
+    stateMutability: 'view',
+    inputs: [{ name: 'user', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
   },
 ] as const
 
@@ -577,6 +584,12 @@ export async function findLatestClaimableCleanup(user: Address): Promise<bigint 
     for (const submissionId of sortedIds) {
       try {
         const details = await getCleanupDetails(submissionId)
+        
+        // Quick check: If already claimed on-chain, skip immediately (no need to check further)
+        if (details.claimed) {
+          continue // Skip to next cleanup
+        }
+        
         // Use let instead of const so we can update it after unmarking
         let localClaimed = typeof window !== 'undefined' ? (() => {
           try {
@@ -590,6 +603,17 @@ export async function findLatestClaimableCleanup(user: Address): Promise<bigint 
           }
           return false
         })() : false
+        
+        // Quick check: If marked as claimed in localStorage AND verified more than 1 hour ago, skip
+        // (Don't skip recent ones in case claim failed)
+        if (localClaimed && details.verified && details.timestamp) {
+          const now = BigInt(Math.floor(Date.now() / 1000))
+          const oneHourAgo = now - BigInt(3600)
+          if (details.timestamp < oneHourAgo) {
+            // Old cleanup marked as claimed - skip it (don't log, just skip)
+            continue
+          }
+        }
         
         // Check if this is a pre-fix cleanup (rewarded=true but user has no balance)
         // IMPORTANT: Check this EVEN IF marked as claimed, because we need to detect pre-fix cleanups
@@ -695,13 +719,7 @@ export async function findLatestClaimableCleanup(user: Address): Promise<bigint 
                     }
                   }
                 }
-              } else {
-                console.log(`[findLatestClaimableCleanup] Cleanup ${submissionId.toString()} verified recently (${verifiedAgo.toString()}s ago, <1h). Allowing claim - not marking as pre-fix.`)
               }
-            } else if (balance > 0n) {
-              console.log(`[findLatestClaimableCleanup] User has balance for cleanup ${submissionId.toString()}:`, balance.toString(), '- not a pre-fix cleanup')
-            } else if (!details.timestamp) {
-              console.warn(`[findLatestClaimableCleanup] Cleanup ${submissionId.toString()} has no timestamp - cannot determine if pre-fix`)
             }
           } catch (error) {
             console.warn(`[findLatestClaimableCleanup] Could not check balance for cleanup ${submissionId.toString()}:`, error)
@@ -711,38 +729,32 @@ export async function findLatestClaimableCleanup(user: Address): Promise<bigint 
         // If cleanup is verified but marked as claimed in localStorage, check if it was actually claimed
         // Sometimes cleanups get incorrectly marked as claimed (e.g., if claim failed)
         // Do this BEFORE checking isClaimable so we can unmark it and make it claimable
-        if (details.verified && !details.rejected && localClaimed && !isPreFixCleanup && REWARD_MANAGER_ADDRESS) {
-          console.warn(`[findLatestClaimableCleanup] ⚠️ Cleanup ${submissionId.toString()} is verified but marked as claimed in localStorage`)
-          console.warn(`[findLatestClaimableCleanup] Checking if it was actually claimed...`)
+        // Only check recent cleanups (< 1 hour) to avoid unnecessary checks on old cleanups
+        if (details.verified && !details.rejected && localClaimed && !isPreFixCleanup && REWARD_MANAGER_ADDRESS && details.timestamp) {
+          const now = BigInt(Math.floor(Date.now() / 1000))
+          const oneHourAgo = now - BigInt(3600)
           
-          // Check if user actually has rewards or if this was a failed claim
-          try {
-            const balance = await readContract(config, {
-              address: REWARD_MANAGER_ADDRESS,
-              abi: [
-                {
-                  type: 'function',
-                  name: 'getBalance',
-                  stateMutability: 'view',
-                  inputs: [{ name: 'user', type: 'address' }],
-                  outputs: [{ name: '', type: 'uint256' }],
-                },
-              ] as const,
-              functionName: 'getBalance',
-              args: [user],
-            }) as bigint
-            
-            // If user has no balance and cleanup is verified, it might not have been actually claimed
-            // Only unmark if cleanup was verified recently (< 1 hour ago) to avoid unmarking old claimed cleanups
-            if (balance === 0n && details.timestamp) {
-              const now = BigInt(Math.floor(Date.now() / 1000))
-              const oneHourAgo = now - BigInt(3600)
-              const verifiedAgo = now - details.timestamp
+          // Only check if verified recently (might be a failed claim)
+          if (details.timestamp > oneHourAgo) {
+            // Check if user actually has rewards or if this was a failed claim
+            try {
+              const balance = await readContract(config, {
+                address: REWARD_MANAGER_ADDRESS,
+                abi: [
+                  {
+                    type: 'function',
+                    name: 'getBalance',
+                    stateMutability: 'view',
+                    inputs: [{ name: 'user', type: 'address' }],
+                    outputs: [{ name: '', type: 'uint256' }],
+                  },
+                ] as const,
+                functionName: 'getBalance',
+                args: [user],
+              }) as bigint
               
-              if (details.timestamp > oneHourAgo) {
-                console.warn(`[findLatestClaimableCleanup] Cleanup ${submissionId.toString()} verified recently (${verifiedAgo.toString()}s ago) but marked as claimed and balance is 0`)
-                console.warn(`[findLatestClaimableCleanup] This might be a failed claim - unmarking from localStorage to allow retry`)
-                
+              // If user has no balance, it might not have been actually claimed
+              if (balance === 0n) {
                 // Unmark from localStorage to allow claiming
                 if (typeof window !== 'undefined') {
                   try {
@@ -756,18 +768,17 @@ export async function findLatestClaimableCleanup(user: Address): Promise<bigint 
                       } else {
                         localStorage.setItem(claimedKey, JSON.stringify(filtered))
                       }
-                      console.log(`[findLatestClaimableCleanup] ✅ Unmarked cleanup ${submissionId.toString()} from claimed list - can now be claimed`)
                       // Update localClaimed to false so it can be returned
                       localClaimed = false
                     }
                   } catch (e) {
-                    console.warn('[findLatestClaimableCleanup] Could not unmark cleanup:', e)
+                    // Ignore localStorage errors
                   }
                 }
               }
+            } catch (error) {
+              // Ignore balance check errors
             }
-          } catch (error) {
-            console.warn(`[findLatestClaimableCleanup] Could not check if cleanup should be unmarked:`, error)
           }
         }
         
@@ -789,16 +800,6 @@ export async function findLatestClaimableCleanup(user: Address): Promise<bigint 
           })
           console.log(`[findLatestClaimableCleanup] Returning cleanup ID: ${submissionId.toString()}`)
           return submissionId
-        } else {
-          console.log(`[findLatestClaimableCleanup] Cleanup ${submissionId.toString()} is not claimable:`, {
-            verified: details.verified,
-            rejected: details.rejected,
-            claimed: details.claimed,
-            localClaimed,
-            isPreFixCleanup,
-            userMatch: details.user.toLowerCase() === user.toLowerCase(),
-            rewarded: details.rewarded,
-          })
         }
       } catch (error) {
         console.warn(`Failed to fetch details for submission ${submissionId}:`, error)
@@ -1782,18 +1783,6 @@ export async function claimImpactProductFromVerification(
   }
 }
 
-export async function getHypercertEligibility(_: Address): Promise<{
-  cleanupCount: bigint
-  hypercertCount: bigint
-  isEligible: boolean
-}> {
-  return {
-    cleanupCount: 0n,
-    hypercertCount: 0n,
-    isEligible: false,
-  }
-}
-
 export async function getStakedDCU(_: Address): Promise<bigint> {
   return 0n
 }
@@ -2062,6 +2051,139 @@ export async function attachRecyclablesToSubmission(
   } catch (error: any) {
     console.error('Error attaching recyclables:', error)
     throw new Error(`Failed to attach recyclables: ${error?.message || error?.shortMessage || 'Unknown error'}`)
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               HYPERCERTS                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Claim Hypercert reward (10 $DCU bonus)
+ * Called after successful Hypercert mint
+ */
+export async function claimHypercertReward(hypercertNumber: bigint): Promise<Hash> {
+  if (!REWARD_MANAGER_ADDRESS) {
+    throw new Error('Reward Manager contract address not configured')
+  }
+
+  const account = getAccount(config)
+  if (!account.address) {
+    throw new Error('Wallet not connected')
+  }
+
+  const REWARD_MANAGER_ABI = [
+    {
+      type: 'function',
+      name: 'claimHypercertReward',
+      stateMutability: 'nonpayable',
+      inputs: [{ name: 'hypercertNumber', type: 'uint256' }],
+      outputs: [],
+    },
+  ] as const
+
+  try {
+    const hash = await writeContract(config, {
+      address: REWARD_MANAGER_ADDRESS,
+      abi: REWARD_MANAGER_ABI,
+      functionName: 'claimHypercertReward',
+      args: [hypercertNumber],
+      account: account.address,
+    })
+
+    await waitForTransactionReceipt(config, {
+      hash,
+      confirmations: 1,
+      pollingInterval: 2000,
+      timeout: 120000,
+    })
+
+    return hash
+  } catch (error: any) {
+    const errorMessage = error?.message || error?.shortMessage || 'Unknown error'
+    throw new Error(`Failed to claim Hypercert reward: ${errorMessage}`)
+  }
+}
+
+/**
+ * Get Hypercert eligibility for a user
+ */
+export interface HypercertEligibility {
+  isEligible: boolean
+  hypercertCount: bigint
+  currentLevel: number
+  cleanupsUntilNext: number
+}
+
+export async function getHypercertEligibility(userAddress: Address): Promise<HypercertEligibility> {
+  if (!SUBMISSION_ADDRESS || !CONTRACT_ADDRESSES.IMPACT_PRODUCT) {
+    return {
+      isEligible: false,
+      hypercertCount: 0n,
+      currentLevel: 0,
+      cleanupsUntilNext: 10,
+    }
+  }
+
+  try {
+    // Get user hypercert count
+    const hypercertCount = await readContract(config, {
+      address: SUBMISSION_ADDRESS,
+      abi: SUBMISSION_ABI,
+      functionName: 'userHypercertCount',
+      args: [userAddress],
+    }) as bigint
+
+    // Get NFT level
+    const IMPACT_PRODUCT_ABI = [
+      {
+        type: 'function',
+        name: 'getUserNFTData',
+        stateMutability: 'view',
+        inputs: [{ name: 'user', type: 'address' }],
+        outputs: [
+          { name: 'tokenId', type: 'uint256' },
+          { name: 'totalCleanups', type: 'uint256' },
+          { name: 'level', type: 'uint256' },
+        ],
+      },
+    ] as const
+
+    let currentLevel = 0
+    try {
+      const nftData = await readContract(config, {
+        address: CONTRACT_ADDRESSES.IMPACT_PRODUCT as Address,
+        abi: IMPACT_PRODUCT_ABI,
+        functionName: 'getUserNFTData',
+        args: [userAddress],
+      }) as [bigint, bigint, bigint]
+
+      currentLevel = Number(nftData[2])
+    } catch {
+      // User may not have NFT yet
+      currentLevel = 0
+    }
+
+    // Eligibility: level > 0 && level % 10 === 0
+    const isEligible = currentLevel > 0 && currentLevel % 10 === 0
+
+    // Calculate cleanups until next Hypercert
+    const cleanupsUntilNext = isEligible ? 0 : 10 - (currentLevel % 10)
+
+    return {
+      isEligible,
+      hypercertCount,
+      currentLevel,
+      cleanupsUntilNext,
+    }
+  } catch (error) {
+    console.error('[Hypercert Eligibility] Error:', error)
+    return {
+      isEligible: false,
+      hypercertCount: 0n,
+      currentLevel: 0,
+      cleanupsUntilNext: 10,
+    }
   }
 }
 
