@@ -60,10 +60,8 @@ For contracts, create `contracts/.env` with your RPC + explorer keys if you plan
 
 ## 📚 Documentation
 
-- **[System Architecture](docs/system-architecture.md)** – Complete end-to-end diagram of frontend/client, contracts, IPFS interactions, and data flow
-- **[Deployment Plan](docs/deployment-plan.md)** – Step-by-step deployment guide with environment setup and post-deployment configuration
-- **[Recyclables Module](docs/recyclables-module.md)** – cRECY reserve requirements, Submission hook, and reserve sync checklist
-- **[Hypercerts & Impact](docs/hypercerts-and-impact.md)** – Future implementation guide for Hypercert aggregation and rewards (currently postponed)
+- **[System Architecture](docs/system-architecture.md)**
+- **[Development Specs](https://github.com/DeCleanup-Network/decleanup-main-celo/blob/main/docs/DEVELOPER_SPECS.md)** - 
 
 ## 🚀 Deployment Status
 
