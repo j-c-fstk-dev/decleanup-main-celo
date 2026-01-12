@@ -59,8 +59,6 @@ Copy `frontend/ENV_TEMPLATE.md` → `.env.local` and fill the values (Chain ID, 
 For contracts, create `contracts/.env` with your RPC + explorer keys if you plan to verify on CeloScan.
 
 ## 📚 Documentation
-
-- **[System Architecture](docs/system-architecture.md)**
 - **[Development Specs](https://github.com/DeCleanup-Network/decleanup-main-celo/blob/main/docs/DEVELOPER_SPECS.md)** - 
 
 ## 🚀 Deployment Status
