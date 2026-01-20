@@ -18,3 +18,14 @@ This file tracks all changes made during the Hypercerts v1 test milestone implem
   - `index.ts`: Clean exports for all modules
 
 **Why**: To implement Hypercerts as environmental impact layer (not reward, not automated, not coupled to AI). Eligibility must be environment-aware for Sepolia testing vs mainnet production. This abstraction enables incremental, reversible changes without touching core flows.
+
+### STEP 2 — Frontend mint UI adjustment (2026-01-20)
+
+**Changed**
+- `frontend/src/app/page.tsx`:
+  - Replaced old `getHypercertEligibility()` calls with new `checkHypercertEligibility()` helper
+  - Now calculates verified cleanups and impact reports by querying user submissions
+  - Updated eligibility state to use `number` instead of `bigint` and added `testingOverride` field
+  - Added testnet indicator "(Sepolia Testnet)" to hypercert mint button when using testing rules
+
+**Why**: To conditionally show/enable mint button based on new eligibility logic. Clearly indicates testnet behavior. Minimal changes to existing UI flow, keeping existing "Mint" button structure.
