@@ -29,3 +29,15 @@ This file tracks all changes made during the Hypercerts v1 test milestone implem
   - Added testnet indicator "(Sepolia Testnet)" to hypercert mint button when using testing rules
 
 **Why**: To conditionally show/enable mint button based on new eligibility logic. Clearly indicates testnet behavior. Minimal changes to existing UI flow, keeping existing "Mint" button structure.
+
+### STEP 3 & 4 — Hypercert metadata builder & wire into mint flow (2026-01-20)
+
+**Changed**
+- `frontend/src/lib/blockchain/hypercerts-minting.ts`:
+  - Modified `mintHypercert()` to generate Hypercert metadata using `buildHypercertMetadata()` from Step 3
+  - Fetches user's verified cleanups and aggregates them for metadata input
+  - Builds comprehensive metadata with hard facts (cleanup IDs, totals, timeframe) + optional narrative
+  - Returns metadata alongside simulated mint result for full traceability
+  - Metadata includes: user address, cleanup references with timestamps, aggregated summary, issuer info, static narrative
+
+**Why**: STEP 3 (metadata builder) was already implemented in v1 skeleton. STEP 4 wires it into the existing mint flow to ensure every mint attempt generates traceable metadata. No changes to mint authority or contract logic, but full metadata generation for auditability.
