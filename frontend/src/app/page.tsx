@@ -19,7 +19,7 @@ import { DashboardActions } from '@/components/dashboard/DashboardActions'
 import { markCleanupAsClaimed, clearPendingCleanup } from '@/lib/blockchain/verification'
 import { resetCleanupState, resetAllCleanupState } from '@/lib/utils/reset-cleanup'
 import { generateReferralLink } from '@/lib/utils/sharing'
-import { checkHypercertEligibility } from '@/lib/blockchain/hypercerts'
+import { checkHypercertEligibility } from '@/lib/blockchain/hypercerts/eligibility'
 import type { Address } from 'viem'
 
 interface ImpactAttribute {
