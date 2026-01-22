@@ -114,94 +114,210 @@ export default function HypercertsTestPage() {
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-background p-4">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bebas mb-4">Hypercerts v1 – Test Page</h1>
-          <p>Please connect your wallet to test Hypercerts functionality.</p>
-        </div>
+      <div className="min-h-screen bg-background">
+        <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 sm:gap-6 px-4 py-4 sm:px-6 sm:py-6">
+          {/* Header Section */}
+          <div className="flex items-center justify-between flex-shrink-0 mb-2">
+            <div>
+              <h1 className="font-bebas text-3xl sm:text-4xl lg:text-5xl tracking-wider text-foreground">
+                HYPERCERTS TEST
+              </h1>
+              <p className="mt-1.5 text-sm sm:text-base text-muted-foreground">
+                Test the Hypercerts v1 eligibility and metadata system
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col rounded-2xl border border-border bg-card p-6 sm:p-8 min-h-[400px] sm:min-h-[500px]">
+            <div className="flex flex-1 flex-col items-center justify-center text-center min-h-0">
+              <div className="mb-4 rounded-2xl border-2 border-border/50 bg-gradient-to-br from-brand-green/5 to-transparent p-8 sm:p-12">
+                <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-muted-foreground/20 flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">🔗</span>
+                </div>
+              </div>
+              <h3 className="mb-2 font-bebas text-2xl sm:text-3xl tracking-wider text-foreground">
+                WALLET NOT CONNECTED
+              </h3>
+              <p className="text-sm sm:text-base text-muted-foreground max-w-xs">
+                Please connect your wallet to test Hypercerts functionality.
+              </p>
+            </div>
+          </div>
+        </main>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bebas mb-4">Hypercerts v1 – Test Page</h1>
-          <div className="text-sm text-muted-foreground space-y-1">
-            <p><strong>Network:</strong> {getNetworkName()}</p>
-            <p><strong>Wallet:</strong> {address}</p>
+    <div className="flex min-h-[100dvh] flex-col bg-background">
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 sm:gap-6 px-4 py-4 sm:px-6 sm:py-6">
+        {/* Header Section */}
+        <div className="flex items-center justify-between flex-shrink-0 mb-2">
+          <div>
+            <h1 className="font-bebas text-3xl sm:text-4xl lg:text-5xl tracking-wider text-foreground">
+              HYPERCERTS TEST
+            </h1>
+            <p className="mt-1.5 text-sm sm:text-base text-muted-foreground">
+              Test the Hypercerts v1 eligibility and metadata system
+            </p>
           </div>
         </div>
 
-        {loading && <p>Loading...</p>}
-
-        {/* Eligibility Status */}
-        <div className="border rounded-lg p-4">
-          <h2 className="text-xl font-bebas mb-3">Eligibility Status</h2>
-          {eligibility ? (
-            <div className="space-y-2">
-              <p><strong>Eligible:</strong> {eligibility.eligible ? 'Yes' : 'No'}</p>
-              <p><strong>Rule Set:</strong> {eligibility.testingOverride ? 'Testnet' : 'Mainnet'}</p>
-              <p><strong>Cleanups Count:</strong> {eligibility.cleanupsCount}</p>
-              <p><strong>Reports Count:</strong> {eligibility.reportsCount}</p>
-              {!eligibility.eligible && <p><strong>Reason:</strong> {eligibility.reason}</p>}
-            </div>
-          ) : (
-            <p>No eligibility data available.</p>
-          )}
+        {/* Network & Wallet Info */}
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mb-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="font-medium">Network:</span>
+            <span className="px-2 py-1 bg-muted rounded text-xs font-medium">{getNetworkName()}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="font-medium">Wallet:</span>
+            <span className="px-2 py-1 bg-muted rounded text-xs font-mono">{address?.slice(0, 6)}...{address?.slice(-4)}</span>
+          </div>
         </div>
 
-        {/* Aggregated Impact Summary */}
-        <div className="border rounded-lg p-4">
-          <h2 className="text-xl font-bebas mb-3">Aggregated Impact Summary</h2>
-          {aggregatedData ? (
-            <div className="space-y-2">
-              <p><strong>Total Verified Cleanups:</strong> {aggregatedData.totalCleanups}</p>
-              <p><strong>Total Impact Reports:</strong> {aggregatedData.totalReports}</p>
-              <p><strong>Timeframe:</strong> {new Date(aggregatedData.timeframeStart).toLocaleDateString()} to {new Date(aggregatedData.timeframeEnd).toLocaleDateString()}</p>
-              <div>
-                <p><strong>Cleanup IDs:</strong></p>
-                <ul className="list-disc list-inside ml-4">
-                  {aggregatedData.cleanupIds.map((id: string) => (
-                    <li key={id}>{id}</li>
-                  ))}
-                </ul>
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
+          {/* Left Column */}
+          <div className="flex flex-col gap-4 sm:gap-6">
+            {/* Eligibility Status */}
+            <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-5 w-5 rounded-full bg-brand-green"></div>
+                <h2 className="font-bebas text-lg sm:text-xl tracking-wider text-foreground">
+                  ELIGIBILITY STATUS
+                </h2>
+              </div>
+              {loading ? (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : eligibility ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Eligible to Mint</span>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      eligibility.eligible
+                        ? 'bg-brand-green/20 text-brand-green'
+                        : 'bg-red-500/20 text-red-500'
+                    }`}>
+                      {eligibility.eligible ? 'YES' : 'NO'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Rule Set</span>
+                    <span className="px-2 py-1 bg-muted rounded text-xs font-medium">
+                      {eligibility.testingOverride ? 'TESTNET' : 'MAINNET'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Verified Cleanups</span>
+                    <span className="font-bebas text-lg">{eligibility.cleanupsCount}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Impact Reports</span>
+                    <span className="font-bebas text-lg">{eligibility.reportsCount}</span>
+                  </div>
+                  {!eligibility.eligible && (
+                    <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                      <p className="text-sm text-red-400">{eligibility.reason}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No eligibility data available.</p>
+              )}
+            </div>
+
+            {/* Mint Simulation */}
+            <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-5 w-5 rounded-full bg-brand-yellow"></div>
+                <h2 className="font-bebas text-lg sm:text-xl tracking-wider text-foreground">
+                  MINT SIMULATION
+                </h2>
+              </div>
+              <div className="space-y-3">
+                <button
+                  onClick={handleSimulateMint}
+                  disabled={!eligibility?.eligible}
+                  className="w-full gap-2 bg-brand-yellow py-3 sm:py-4 font-bebas text-sm sm:text-base tracking-wider text-black hover:bg-[#e6e600] disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-all flex items-center justify-center"
+                >
+                  SIMULATE HYPERCERT MINT
+                </button>
+                {mintResult && (
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-sm font-mono">{mintResult}</p>
+                  </div>
+                )}
               </div>
             </div>
-          ) : (
-            <p>No aggregated data available.</p>
-          )}
-        </div>
+          </div>
 
-        {/* Metadata Preview */}
-        <div className="border rounded-lg p-4">
-          <h2 className="text-xl font-bebas mb-3">Metadata Preview</h2>
-          {metadata ? (
-            <pre className="bg-muted p-3 rounded text-xs overflow-auto max-h-96">
-              {JSON.stringify(metadata, null, 2)}
-            </pre>
-          ) : (
-            <p>No metadata available.</p>
-          )}
-        </div>
+          {/* Right Column */}
+          <div className="flex flex-col gap-4 sm:gap-6">
+            {/* Aggregated Impact Summary */}
+            <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-5 w-5 rounded-full bg-brand-blue"></div>
+                <h2 className="font-bebas text-lg sm:text-xl tracking-wider text-foreground">
+                  IMPACT SUMMARY
+                </h2>
+              </div>
+              {loading ? (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : aggregatedData ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="text-center">
+                      <div className="font-bebas text-2xl text-brand-green">{aggregatedData.totalCleanups}</div>
+                      <div className="text-xs text-muted-foreground uppercase tracking-wide">Cleanups</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-bebas text-2xl text-brand-yellow">{aggregatedData.totalReports}</div>
+                      <div className="text-xs text-muted-foreground uppercase tracking-wide">Reports</div>
+                    </div>
+                  </div>
+                  <div className="pt-3 border-t border-border">
+                    <div className="text-sm text-muted-foreground mb-2">Timeframe</div>
+                    <div className="font-mono text-xs">
+                      {new Date(aggregatedData.timeframeStart).toLocaleDateString()} - {new Date(aggregatedData.timeframeEnd).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div className="pt-3 border-t border-border">
+                    <div className="text-sm text-muted-foreground mb-2">Cleanup IDs ({aggregatedData.cleanupIds.length})</div>
+                    <div className="max-h-32 overflow-y-auto">
+                      {aggregatedData.cleanupIds.map((id: string, index: number) => (
+                        <div key={id} className="font-mono text-xs text-muted-foreground">
+                          {index + 1}. {id}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No impact data available.</p>
+              )}
+            </div>
 
-        {/* Mint Simulation */}
-        <div className="border rounded-lg p-4">
-          <h2 className="text-xl font-bebas mb-3">Mint Simulation</h2>
-          <button
-            onClick={handleSimulateMint}
-            disabled={!eligibility?.eligible}
-            className="px-4 py-2 bg-brand-yellow text-black rounded disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Simulate Hypercert Mint
-          </button>
-          {mintResult && (
-            <p className="mt-2 text-sm">{mintResult}</p>
-          )}
+            {/* Metadata Preview */}
+            <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="h-5 w-5 rounded-full bg-purple-500"></div>
+                <h2 className="font-bebas text-lg sm:text-xl tracking-wider text-foreground">
+                  METADATA PREVIEW
+                </h2>
+              </div>
+              {loading ? (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : metadata ? (
+                <pre className="bg-muted p-3 rounded-lg text-xs overflow-auto max-h-64 font-mono">
+                  {JSON.stringify(metadata, null, 2)}
+                </pre>
+              ) : (
+                <p className="text-sm text-muted-foreground">No metadata available.</p>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }
