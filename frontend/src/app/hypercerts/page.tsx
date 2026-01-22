@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useAccount, useChainId } from 'wagmi'
 import { getUserSubmissions, getCleanupDetails } from '@/lib/blockchain/contracts'
-import { checkHypercertEligibility, aggregateUserCleanups, buildHypercertMetadata } from '@/lib/blockchain/hypercerts'
+import { checkHypercertEligibility } from '@/lib/blockchain/hypercerts/eligibility'
+import { aggregateUserCleanups } from '@/lib/blockchain/hypercerts/aggregation'
+import { buildHypercertMetadata } from '@/lib/blockchain/hypercerts/metadata'
 import { mintHypercert } from '@/lib/blockchain/hypercerts-minting'
 
 export default function HypercertsTestPage() {
@@ -22,7 +24,7 @@ export default function HypercertsTestPage() {
       setLoading(true)
       try {
         // Get user's verified cleanups
-        const submissions = await getUserSubmissions(address)
+        const submissions = await getUserSubmissions(address as `0x${string}`)
         const verifiedCleanups = []
         let impactReportsCount = 0
 
@@ -59,7 +61,7 @@ export default function HypercertsTestPage() {
 
           // Build metadata
           const metadataInput = {
-            userAddress: address,
+            userAddress: address as `0x${string}`,
             cleanups: verifiedCleanups,
             summary: {
               totalCleanups: aggregated.totalCleanups,
