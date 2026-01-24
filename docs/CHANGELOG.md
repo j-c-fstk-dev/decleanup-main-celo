@@ -80,3 +80,25 @@ This file tracks all changes made during the Hypercerts v1 test milestone implem
   - UI clarification only - no changes to eligibility logic or data aggregation
 
 **Why**: Makes Hypercerts feature discoverable on all networks (avoiding user confusion from conditional visibility). Clearly separates reward system (levels/Impact Products) from environmental impact certification system (Hypercerts). Ensures testing mode works correctly in production build with proper React hooks. All changes maintain existing logic while improving clarity and accessibility.
+
+### STEP 7 — Fix eligibility detection to use active wallet chain (2026-01-24)
+
+**Changed**
+- `frontend/src/lib/blockchain/hypercerts/testing.ts`:
+  - Removed static `process.env.NEXT_PUBLIC_CHAIN_ID` check that was build-time only
+  - Changed `isTestingMode()` to accept `chainId` parameter for runtime detection
+  - Now correctly identifies testnet vs mainnet based on active wallet connection
+
+- `frontend/src/lib/blockchain/hypercerts/eligibility.ts`:
+  - Added `chainId` parameter to `checkHypercertEligibility()`
+  - Passes `chainId` to `isTestingMode()` for proper threshold selection
+  - Fixed `testingOverride` to return `true` (not `testing || undefined`) for clarity
+  - Now dynamically selects thresholds: Sepolia (1 cleanup + 1 report) vs Mainnet (10 + 1)
+
+- `frontend/src/app/hypercerts/page.tsx`:
+  - Passes `chainId` from `useChainId()` hook to eligibility check
+  - Added "Levels vs Hypercerts" explanation card above mint simulation
+  - Clarifies that levels are per cleanup, Hypercerts aggregate multiple cleanups with reports
+  - Prevents confusion about "I'm level 10 but ineligible" scenarios
+
+**Why**: Fixed critical bug where testnet/mainnet rules were determined at build time instead of runtime. Users on Sepolia were seeing mainnet thresholds (10 cleanups) instead of testnet thresholds (1 cleanup). Now the system correctly detects the active wallet's chain and applies appropriate eligibility rules. Also improved UX by explicitly teaching the mental model: Impact Product levels ≠ Hypercert eligibility.
