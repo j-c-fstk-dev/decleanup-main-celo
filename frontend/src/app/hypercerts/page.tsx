@@ -46,7 +46,8 @@ export default function HypercertsTestPage() {
         // Check eligibility
         const eligibilityResult = checkHypercertEligibility({
           cleanupsCount: verifiedCleanups.length,
-          reportsCount: impactReportsCount
+          reportsCount: impactReportsCount,
+          chainId,
         })
         setEligibility(eligibilityResult)
 
@@ -232,6 +233,20 @@ export default function HypercertsTestPage() {
                     Hypercerts are minted separately and require a minimum number of
                     verified cleanups <strong>with impact reports</strong>.
                   </p>
+            </div>
+            {/* Levels vs Hypercerts Explanation */}
+            <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-4 w-4 rounded-full bg-muted-foreground"></div>
+                <h3 className="font-bebas text-sm tracking-wider text-muted-foreground">
+                  LEVELS vs HYPERCERTS
+                </h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Levels are earned per verified cleanup via Impact Products.
+                Hypercerts are minted separately and represent aggregated impact
+                across multiple verified cleanups with impact reports.
+              </p>
             </div>
             {/* Mint Simulation */}
             <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
