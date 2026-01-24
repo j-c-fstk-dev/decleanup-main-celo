@@ -56,28 +56,27 @@ This file tracks all changes made during the Hypercerts v1 test milestone implem
 
 **Why**: Creates a "truth window" into the Hypercerts system for stakeholders to see what already works. Exposes eligibility computation, aggregation, metadata building, and mint simulation without changing any core logic. Page is test-only and not production UI.
 
-### Hypercerts Integration (2025-12-16)
-
-This release focuses on integrating Hypercerts into the project, updating the testing mode implementation, and ensuring the correct thresholds for testing and production environments.
+### STEP 6 — Production readiness and UI improvements (2026-01-24)
 
 **Changed**
-- Updated `isTestingMode` implementation in `frontend/src/lib/blockchain/hypercerts/testing.ts` to use Wagmi for runtime-safe chain ID verification
-- Verified and adjusted thresholds in `frontend/src/lib/blockchain/hypercerts/config.ts` to ensure testing thresholds are set to `minCleanups: 1` and `minReports: 1`, and production thresholds remain `minCleanups: 10` and `minReports: 1`
+- `frontend/src/lib/blockchain/hypercerts/testing.ts`:
+  - Updated `isTestingMode` implementation to use Wagmi's `useChainId()` for runtime-safe chain ID verification
+  - Ensures testing mode detection works correctly in React components without SSR issues
 
-**Deployment & Configuration**
-- Updated environment variables and configuration files to support Hypercerts integration
-- Ensured proper access control and data display in the verifier dashboard
+- `frontend/src/lib/blockchain/hypercerts/config.ts`:
+  - Verified and confirmed testing thresholds: `minCleanups: 1`, `minReports: 1` (for Sepolia testing)
+  - Verified and confirmed production thresholds: `minCleanups: 10`, `minReports: 1` (for mainnet)
+  - Ensures environment-aware eligibility works correctly across networks
 
-**Scripts**
-- Updated scripts to support the new Hypercerts integration and testing mode implementation
+- `frontend/src/app/page.tsx`:
+  - Made Hypercerts link permanently visible in Quick Actions section (removed `chainId === 44787` conditional)
+  - Updated Quick Actions grid to fixed 3 columns: Leaderboard, Verifier Cabinet, Hypercerts
+  - Maintains consistent visual pattern across all action cards (styling and hover effects)
+  - Kept conditional mint button that only appears when user is eligible
 
-**Fixed**
-- Fixed issues related to Hypercerts integration and testing mode implementation
-- Ensured correct thresholds for testing and production environments
+- `frontend/src/app/hypercerts/page.tsx`:
+  - Added explanatory UI block clearly distinguishing Impact Product Levels from Hypercerts
+  - Explicitly states: levels are per verified cleanup, Hypercerts require verified cleanups **with impact reports**
+  - UI clarification only - no changes to eligibility logic or data aggregation
 
-**Key Achievements**
-- Integrated Hypercerts into the project
-- Updated testing mode implementation to use Wagmi
-- Verified and adjusted thresholds for testing and production environments
-- Ensured proper access control and data display in the verifier dashboard
-- Updated scripts to support the new Hypercerts integration and testing mode implementation
+**Why**: Makes Hypercerts feature discoverable on all networks (avoiding user confusion from conditional visibility). Clearly separates reward system (levels/Impact Products) from environmental impact certification system (Hypercerts). Ensures testing mode works correctly in production build with proper React hooks. All changes maintain existing logic while improving clarity and accessibility.
