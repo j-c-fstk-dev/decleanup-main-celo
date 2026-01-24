@@ -1,4 +1,11 @@
+import { getChainId } from '@wagmi/core'
+import { config } from '../wagmi'
+
 export function isTestingMode(): boolean {
-  // safest possible v1 condition
-  return process.env.NEXT_PUBLIC_CHAIN_ID === '44787' // Celo Sepolia
+  try {
+    const chainId = getChainId(config)
+    return chainId === 44787 // Celo Sepolia
+  } catch {
+    return false
+  }
 }

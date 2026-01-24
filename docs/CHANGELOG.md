@@ -55,3 +55,29 @@ This file tracks all changes made during the Hypercerts v1 test milestone implem
 - `frontend/src/app/page.tsx`: Added conditional navigation link to Hypercerts test page visible only on Celo Sepolia testnet
 
 **Why**: Creates a "truth window" into the Hypercerts system for stakeholders to see what already works. Exposes eligibility computation, aggregation, metadata building, and mint simulation without changing any core logic. Page is test-only and not production UI.
+
+### Hypercerts Integration (2025-12-16)
+
+This release focuses on integrating Hypercerts into the project, updating the testing mode implementation, and ensuring the correct thresholds for testing and production environments.
+
+**Changed**
+- Updated `isTestingMode` implementation in `frontend/src/lib/blockchain/hypercerts/testing.ts` to use Wagmi for runtime-safe chain ID verification
+- Verified and adjusted thresholds in `frontend/src/lib/blockchain/hypercerts/config.ts` to ensure testing thresholds are set to `minCleanups: 1` and `minReports: 1`, and production thresholds remain `minCleanups: 10` and `minReports: 1`
+
+**Deployment & Configuration**
+- Updated environment variables and configuration files to support Hypercerts integration
+- Ensured proper access control and data display in the verifier dashboard
+
+**Scripts**
+- Updated scripts to support the new Hypercerts integration and testing mode implementation
+
+**Fixed**
+- Fixed issues related to Hypercerts integration and testing mode implementation
+- Ensured correct thresholds for testing and production environments
+
+**Key Achievements**
+- Integrated Hypercerts into the project
+- Updated testing mode implementation to use Wagmi
+- Verified and adjusted thresholds for testing and production environments
+- Ensured proper access control and data display in the verifier dashboard
+- Updated scripts to support the new Hypercerts integration and testing mode implementation
