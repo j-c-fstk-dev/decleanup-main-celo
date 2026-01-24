@@ -225,7 +225,14 @@ export default function HypercertsTestPage() {
                 <p className="text-sm text-muted-foreground">No eligibility data available.</p>
               )}
             </div>
-
+                  <div className="mt-4 rounded-lg border border-border bg-muted p-3 text-sm text-muted-foreground">
+                    <p className="mb-1 font-medium text-foreground">ℹ️ Levels vs Hypercerts</p>
+                  <p>
+                    Levels are Impact Products earned per verified cleanup.
+                    Hypercerts are minted separately and require a minimum number of
+                    verified cleanups <strong>with impact reports</strong>.
+                  </p>
+            </div>
             {/* Mint Simulation */}
             <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
