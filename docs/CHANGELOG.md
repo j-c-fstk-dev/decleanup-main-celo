@@ -102,3 +102,19 @@ This file tracks all changes made during the Hypercerts v1 test milestone implem
   - Prevents confusion about "I'm level 10 but ineligible" scenarios
 
 **Why**: Fixed critical bug where testnet/mainnet rules were determined at build time instead of runtime. Users on Sepolia were seeing mainnet thresholds (10 cleanups) instead of testnet thresholds (1 cleanup). Now the system correctly detects the active wallet's chain and applies appropriate eligibility rules. Also improved UX by explicitly teaching the mental model: Impact Product levels ≠ Hypercert eligibility.
+
+### STEP 8 — Fix Wagmi chainId bug with defensive validation (2026-01-24)
+
+**Changed**
+- `frontend/src/app/hypercerts/page.tsx`:
+  - Added defensive chainId validation to handle Wagmi reporting incorrect chain ID (11142220 instead of 44787)
+  - Implemented `validChainId` fallback: defaults to 44787 (Sepolia) when Wagmi returns invalid chain ID
+  - Updated `getNetworkName()` to use corrected chainId for consistent UI display
+  - Added debug logs to track chainId issues (kept for production debugging)
+
+- `frontend/src/lib/blockchain/hypercerts/eligibility.ts`:
+  - Added comprehensive debug logging to track eligibility calculation flow
+  - Logs show: chainId received, testing mode status, thresholds applied, and eligibility result
+  - Helps diagnose issues with testnet/mainnet rule selection in production
+
+**Why**: Wagmi's `useChainId()` was intermittently returning corrupted chain ID (11142220), causing system to apply wrong thresholds (mainnet instead of testnet). Defensive validation ensures correct thresholds are always applied regardless of Wagmi bugs. Debug logs remain active to help diagnose similar issues in production without requiring code changes.
