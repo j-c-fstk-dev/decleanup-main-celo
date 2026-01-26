@@ -180,3 +180,21 @@ This file tracks all changes made during the Hypercerts v1 test milestone implem
   - Request list displays: ID, status (color-coded), submission date, review date
 
 **Why**: Implements Phase 4 of mainnet readiness plan - establishes the request queue system that separates user submission from verifier-controlled minting. Users can now submit Hypercert creation requests that persist in local storage (v1) and await verifier approval. This is the core workflow for mainnet where minting is gated by verifier review. The UI shows users their request history and status, providing transparency into the approval process. Next phase will add the verifier interface to review and approve/reject these requests.
+
+### STEP 11 — Verifier UI: Hypercert request review & approval (2026-01-26)
+
+Changed
+- frontend/src/app/verifier/page.tsx:
+  - Added "Pending Hypercert Requests" section before existing "Pending Cleanups"
+  - Loads Hypercert creation requests with PENDING status
+  - Displays requester address, submission date, and request status
+  - Added approve and reject actions for each Hypercert request
+  - Added per-request processing state to prevent duplicate actions
+
+- frontend/src/features/verifier/pages/page.tsx:
+  - Mirrored Hypercert request review UI to ensure compatibility
+  - Added same request loading, approval, and rejection logic
+  - Ensures Hypercert review works regardless of which verifier page is active
+  - Keeps cleanup verification flow unchanged
+
+Why: Implements the verifier-side approval flow for Hypercert creation requests. Because the project currently has two verifier entry points, the Hypercert review logic was added to both to avoid routing ambiguity. Verifiers can now review, approve, or reject Hypercert requests submitted by users, completing the submission → review gate required for the mainnet Hypercert flow. No contract interaction is triggered yet; minting remains a future step after verifier approval.
