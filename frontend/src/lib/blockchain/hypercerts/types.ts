@@ -42,3 +42,17 @@ export interface HypercertMetadataInput {
     preventionIdeas?: string
   }
 }
+
+export type HypercertRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export interface HypercertRequest {
+  id: string
+  requester: string
+  metadata: any
+  metadataCid?: string
+  status: HypercertRequestStatus
+  submittedAt: number
+  reviewedAt?: number
+  reviewedBy?: string
+  rejectionReason?: string
+}

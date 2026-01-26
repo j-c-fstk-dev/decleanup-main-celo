@@ -144,3 +144,39 @@ This file tracks all changes made during the Hypercerts v1 test milestone implem
   - Branding data positioned between `impact` and `narrative` in metadata structure
 
 **Why**: Transforms test page into production-ready "Create Hypercert" flow while maintaining all existing logic. Introduces mainnet-compatible metadata structure that supports optional presentation assets (logo/banner/title/description) without affecting eligibility or verification rules. This is Phase 1-3 of the mainnet readiness plan: the UI now reflects the final intended user flow (submit → verifier approval → mint), while keeping simulation behavior temporarily for testing. Next phases will add actual request queue and verifier approval mechanisms.
+
+### STEP 10 — Hypercert request queue system (2026-01-25)
+
+**Added**
+- `frontend/src/lib/blockchain/hypercerts/types.ts`:
+  - Added `HypercertRequestStatus` type: 'PENDING' | 'APPROVED' | 'REJECTED'
+  - Added `HypercertRequest` interface with fields: id, requester, metadata, metadataCid, status, submittedAt, reviewedAt, reviewedBy, rejectionReason
+  - Enables tracking of Hypercert creation requests through submission → review → mint workflow
+
+- `frontend/src/lib/blockchain/hypercerts/requests.ts`:
+  - New module for managing Hypercert request queue
+  - Implemented `submitHypercertRequest()` to create new requests with PENDING status
+  - Implemented `approveHypercertRequest()` for verifier approval workflow
+  - Implemented `rejectHypercertRequest()` for verifier rejection with optional reason
+  - Implemented `getAllHypercertRequests()` to list all requests
+  - Implemented `getHypercertRequestsByStatus()` to filter by status
+  - Implemented `getHypercertRequestsByUser()` to filter by requester address
+  - Implemented `clearAllHypercertRequests()` utility for testing
+  - Uses localStorage for v1 temporary storage (SSR-safe with window checks)
+  - Includes comprehensive logging for debugging
+
+- `frontend/src/lib/blockchain/hypercerts/index.ts`:
+  - Exported all functions from `requests` module for clean imports
+
+**Changed**
+- `frontend/src/app/hypercerts/page.tsx`:
+  - Connected `handleSubmitRequest` to actual `submitHypercertRequest()` function
+  - Removed simulation/TODO placeholder code
+  - Added import for request management functions
+  - Added `userRequests` state to track user's submitted requests
+  - Added useEffect to load user's existing requests on mount and after submission
+  - Added "YOUR REQUESTS" section in UI showing request history with status badges
+  - Updated success message to show Request ID and explain pending verifier approval
+  - Request list displays: ID, status (color-coded), submission date, review date
+
+**Why**: Implements Phase 4 of mainnet readiness plan - establishes the request queue system that separates user submission from verifier-controlled minting. Users can now submit Hypercert creation requests that persist in local storage (v1) and await verifier approval. This is the core workflow for mainnet where minting is gated by verifier review. The UI shows users their request history and status, providing transparency into the approval process. Next phase will add the verifier interface to review and approve/reject these requests.

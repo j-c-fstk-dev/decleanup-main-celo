@@ -7,6 +7,7 @@ import { checkHypercertEligibility } from '@/lib/blockchain/hypercerts/eligibili
 import { aggregateUserCleanups } from '@/lib/blockchain/hypercerts/aggregation'
 import { buildHypercertMetadata } from '@/lib/blockchain/hypercerts/metadata'
 import { mintHypercert } from '@/lib/blockchain/hypercerts-minting'
+import { submitHypercertRequest, getHypercertRequestsByUser } from '@/lib/blockchain/hypercerts/requests'
 
 export default function HypercertsTestPage() {
   const { address, isConnected } = useAccount()
@@ -107,16 +108,37 @@ export default function HypercertsTestPage() {
     loadData()
   }, [address, isConnected])
 
+  const [userRequests, setUserRequests] = useState<any[]>([])
+
+  // Load user's existing requests
+  useEffect(() => {
+    if (!address) return
+    
+    const requests = getHypercertRequestsByUser(address)
+    setUserRequests(requests)
+    console.log('📋 User Hypercert requests:', requests)
+  }, [address, submitResult]) // Refresh when new request is submitted
+
   const handleSubmitRequest = async () => {
     if (!address || !metadata) return
 
     setSubmitResult('Submitting request...')
     try {
-      // TODO: Replace with actual submitHypercertRequest() in Phase 4
-      // For now, keep simulation behavior for testing
-      const result = await mintHypercert(address)
-      console.log('Hypercert request submitted (simulation):', result)
-      setSubmitResult(`Request submitted! Hypercert ID: ${result.hypercertId}\n\nStatus: Pending verifier approval`)
+      // Submit Hypercert request for verifier review
+      const request = submitHypercertRequest({
+        requester: address,
+        metadata: metadata,
+      })
+
+      console.log('✅ Hypercert request submitted:', request)
+      
+      setSubmitResult(
+        `Request submitted successfully!\n\n` +
+        `Request ID: ${request.id}\n` +
+        `Status: ${request.status}\n\n` +
+        `Your Hypercert is now pending verifier approval. ` +
+        `You will be notified once a verifier reviews your submission.`
+      )
     } catch (error) {
       console.error('Error submitting Hypercert request:', error)
       setSubmitResult(`Error: ${error instanceof Error ? error.message : String(error)}`)
@@ -295,6 +317,41 @@ export default function HypercertsTestPage() {
                 across multiple verified cleanups with impact reports.
               </p>
             </div>
+            {/* User's Requests */}
+            {userRequests.length > 0 && (
+              <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-5 w-5 rounded-full bg-brand-blue"></div>
+                  <h2 className="font-bebas text-lg sm:text-xl tracking-wider text-foreground">
+                    YOUR REQUESTS
+                  </h2>
+                </div>
+                <div className="space-y-3">
+                  {userRequests.map((request) => (
+                    <div key={request.id} className="rounded-lg border border-border bg-background p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-mono text-muted-foreground">{request.id}</span>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          request.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-500' :
+                          request.status === 'APPROVED' ? 'bg-brand-green/20 text-brand-green' :
+                          'bg-red-500/20 text-red-500'
+                        }`}>
+                          {request.status}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Submitted: {new Date(request.submittedAt).toLocaleDateString()}
+                      </div>
+                      {request.reviewedAt && (
+                        <div className="text-xs text-muted-foreground">
+                          Reviewed: {new Date(request.reviewedAt).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Submit for Review */}
             <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
