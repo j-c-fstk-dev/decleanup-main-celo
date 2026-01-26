@@ -12,6 +12,13 @@ export interface HypercertImpactSummary {
   timeframeEnd: number
 }
 
+export interface HypercertBranding {
+  logoImageCid?: string
+  bannerImageCid?: string
+  title?: string
+  description?: string
+}
+
 export interface HypercertEligibilityResult {
   eligible: boolean
   reason?: string
@@ -26,6 +33,7 @@ export interface HypercertMetadataInput {
   summary: HypercertImpactSummary
   issuer: string
   version: string
+  branding?: HypercertBranding
   narrative?: {
     description?: string
     locations?: string[]

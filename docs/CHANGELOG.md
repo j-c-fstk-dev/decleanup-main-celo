@@ -118,3 +118,29 @@ This file tracks all changes made during the Hypercerts v1 test milestone implem
   - Helps diagnose issues with testnet/mainnet rule selection in production
 
 **Why**: Wagmi's `useChainId()` was intermittently returning corrupted chain ID (11142220), causing system to apply wrong thresholds (mainnet instead of testnet). Defensive validation ensures correct thresholds are always applied regardless of Wagmi bugs. Debug logs remain active to help diagnose similar issues in production without requiring code changes.
+
+### STEP 9 — Mainnet preparation: UI transformation and metadata extension (2026-01-25)
+
+**Changed**
+- `frontend/src/app/hypercerts/page.tsx`:
+  - Renamed page from "HYPERCERTS TEST" to "CREATE HYPERCERT" for production readiness
+  - Updated subtitle to "Aggregate your verified cleanups into an environmental impact certificate"
+  - Added "HOW IT WORKS" section explaining the 4-step flow: aggregate → submit → review → mint
+  - Renamed "Mint Simulation" section to "Submit for Review"
+  - Changed button text from "SIMULATE HYPERCERT MINT" to "SUBMIT HYPERCERT FOR REVIEW"
+  - Renamed handler from `handleSimulateMint` to `handleSubmitRequest`
+  - Updated result messages to reflect submission workflow instead of direct minting
+  - Renamed state variable from `mintResult` to `submitResult` for semantic clarity
+  - Added TODO marker for Phase 4 backend integration
+
+- `frontend/src/lib/blockchain/hypercerts/types.ts`:
+  - Added `HypercertBranding` interface with optional fields: `logoImageCid`, `bannerImageCid`, `title`, `description`
+  - Extended `HypercertMetadataInput` to accept optional `branding` field
+  - Maintains backward compatibility (branding is optional)
+
+- `frontend/src/lib/blockchain/hypercerts/metadata.ts`:
+  - Updated `buildHypercertMetadata()` to include `branding` field in output
+  - Returns `null` when branding is not provided (backward compatible)
+  - Branding data positioned between `impact` and `narrative` in metadata structure
+
+**Why**: Transforms test page into production-ready "Create Hypercert" flow while maintaining all existing logic. Introduces mainnet-compatible metadata structure that supports optional presentation assets (logo/banner/title/description) without affecting eligibility or verification rules. This is Phase 1-3 of the mainnet readiness plan: the UI now reflects the final intended user flow (submit → verifier approval → mint), while keeping simulation behavior temporarily for testing. Next phases will add actual request queue and verifier approval mechanisms.

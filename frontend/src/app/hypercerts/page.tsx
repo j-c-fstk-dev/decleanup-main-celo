@@ -26,7 +26,7 @@ export default function HypercertsTestPage() {
   const [eligibility, setEligibility] = useState<any>(null)
   const [aggregatedData, setAggregatedData] = useState<any>(null)
   const [metadata, setMetadata] = useState<any>(null)
-  const [mintResult, setMintResult] = useState<string>('')
+  const [submitResult, setSubmitResult] = useState<string>('')
 
   useEffect(() => {
     if (!address || !isConnected) return
@@ -107,17 +107,19 @@ export default function HypercertsTestPage() {
     loadData()
   }, [address, isConnected])
 
-  const handleSimulateMint = async () => {
-    if (!address) return
+  const handleSubmitRequest = async () => {
+    if (!address || !metadata) return
 
-    setMintResult('Simulating...')
+    setSubmitResult('Submitting request...')
     try {
+      // TODO: Replace with actual submitHypercertRequest() in Phase 4
+      // For now, keep simulation behavior for testing
       const result = await mintHypercert(address)
-      console.log('Mint simulation result:', result)
-      setMintResult(`Success! Hypercert ID: ${result.hypercertId}, Tx: ${result.txHash}`)
+      console.log('Hypercert request submitted (simulation):', result)
+      setSubmitResult(`Request submitted! Hypercert ID: ${result.hypercertId}\n\nStatus: Pending verifier approval`)
     } catch (error) {
-      console.error('Mint simulation error:', error)
-      setMintResult(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      console.error('Error submitting Hypercert request:', error)
+      setSubmitResult(`Error: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -138,10 +140,10 @@ export default function HypercertsTestPage() {
           <div className="flex items-center justify-between flex-shrink-0 mb-2">
             <div>
               <h1 className="font-bebas text-3xl sm:text-4xl lg:text-5xl tracking-wider text-foreground">
-                HYPERCERTS TEST
+                CREATE HYPERCERT
               </h1>
               <p className="mt-1.5 text-sm sm:text-base text-muted-foreground">
-                Test the Hypercerts v1 eligibility and metadata system
+                Aggregate your verified cleanups into an environmental impact certificate
               </p>
             </div>
           </div>
@@ -173,10 +175,10 @@ export default function HypercertsTestPage() {
         <div className="flex items-center justify-between flex-shrink-0 mb-2">
           <div>
             <h1 className="font-bebas text-3xl sm:text-4xl lg:text-5xl tracking-wider text-foreground">
-              HYPERCERTS TEST
+              CREATE HYPERCERT
             </h1>
             <p className="mt-1.5 text-sm sm:text-base text-muted-foreground">
-              Test the Hypercerts v1 eligibility and metadata system
+              Aggregate your verified cleanups into an environmental impact certificate
             </p>
           </div>
         </div>
@@ -191,6 +193,34 @@ export default function HypercertsTestPage() {
             <span className="font-medium">Wallet:</span>
             <span className="px-2 py-1 bg-muted rounded text-xs font-mono">{address?.slice(0, 6)}...{address?.slice(-4)}</span>
           </div>
+        </div>
+
+        {/* How It Works Section */}
+        <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="h-5 w-5 rounded-full bg-brand-blue"></div>
+            <h2 className="font-bebas text-lg sm:text-xl tracking-wider text-foreground">
+              HOW IT WORKS
+            </h2>
+          </div>
+          <ol className="space-y-2 text-sm text-muted-foreground">
+            <li className="flex gap-2">
+              <span className="font-semibold text-foreground">1.</span>
+              <span>Your verified cleanups and reports are aggregated</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="font-semibold text-foreground">2.</span>
+              <span>You submit a Hypercert creation request</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="font-semibold text-foreground">3.</span>
+              <span>Verifiers review your impact</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="font-semibold text-foreground">4.</span>
+              <span>Hypercert is minted after approval</span>
+            </li>
+          </ol>
         </div>
 
         {/* Main Content Grid */}
@@ -265,25 +295,25 @@ export default function HypercertsTestPage() {
                 across multiple verified cleanups with impact reports.
               </p>
             </div>
-            {/* Mint Simulation */}
+            {/* Submit for Review */}
             <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
                 <div className="h-5 w-5 rounded-full bg-brand-yellow"></div>
                 <h2 className="font-bebas text-lg sm:text-xl tracking-wider text-foreground">
-                  MINT SIMULATION
+                  SUBMIT FOR REVIEW
                 </h2>
               </div>
               <div className="space-y-3">
                 <button
-                  onClick={handleSimulateMint}
+                  onClick={handleSubmitRequest}
                   disabled={!eligibility?.eligible}
                   className="w-full gap-2 bg-brand-yellow py-3 sm:py-4 font-bebas text-sm sm:text-base tracking-wider text-black hover:bg-[#e6e600] disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-all flex items-center justify-center"
                 >
-                  SIMULATE HYPERCERT MINT
+                  SUBMIT HYPERCERT FOR REVIEW
                 </button>
-                {mintResult && (
+                {submitResult && (
                   <div className="p-3 bg-muted rounded-lg">
-                    <p className="text-sm font-mono">{mintResult}</p>
+                    <p className="text-sm font-mono whitespace-pre-line">{submitResult}</p>
                   </div>
                 )}
               </div>
