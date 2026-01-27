@@ -198,3 +198,48 @@ Changed
   - Keeps cleanup verification flow unchanged
 
 Why: Implements the verifier-side approval flow for Hypercert creation requests. Because the project currently has two verifier entry points, the Hypercert review logic was added to both to avoid routing ambiguity. Verifiers can now review, approve, or reject Hypercert requests submitted by users, completing the submission → review gate required for the mainnet Hypercert flow. No contract interaction is triggered yet; minting remains a future step after verifier approval.
+
+### STEP 12 — Real Hypercert minting via SDK (2026-01-27)
+
+**Added**
+- `frontend/src/lib/blockchain/ipfs.ts`:
+  - Added `uploadHypercertMetadataToIPFS()` function for uploading Hypercert metadata JSON to IPFS
+  - Formats metadata with type and standard fields for Hypercert compatibility
+  - Uses descriptive filenames with user address and timestamp
+
+- `frontend/src/lib/blockchain/hypercerts/requests.ts`:
+  - Added `updateRequestWithHypercertId()` function to update requests with minted Hypercert ID
+  - Allows tracking which requests have been successfully minted on-chain
+
+**Changed**
+- `frontend/src/lib/blockchain/hypercerts/config.ts`:
+  - Added `contract` configuration with Hypercert contract address on Celo Sepolia
+  - Added `network` configuration with chain name and RPC URL
+  - Contract address: `0x8610fe3190E21bf090c9F463b162A76478A88F5F`
+  - Chain ID: `44787` (Celo Sepolia testnet)
+
+- `frontend/src/lib/blockchain/hypercerts/types.ts`:
+  - Added `hypercertId` field to `HypercertRequest` interface
+  - Enables tracking of minted Hypercert IDs within request objects
+
+- `frontend/src/lib/blockchain/hypercerts-minting.ts`:
+  - **Complete rewrite**: Replaced simulation with real on-chain minting via Hypercerts SDK
+  - Added `getHypercertClient()` to initialize SDK with wallet client
+  - Added `mintHypercertOnChain()` to mint Hypercerts directly to blockchain
+  - Integrated `uploadHypercertMetadataToIPFS()` in full minting flow
+  - Updated `mintHypercert()` to: upload metadata → mint on-chain → return transaction hash and Hypercert ID
+  - Uses `@hypercerts-org/sdk` v2.9.1 with proper TransferRestrictions enum
+  - Mints with 10,000 total units (standard 100% representation)
+  - Sets transfer restriction to `AllowAll`
+
+- `frontend/src/app/hypercerts/page.tsx`:
+  - Added import for `updateRequestWithHypercertId` function
+  - Added `handleMintApprovedRequest()` function to mint approved requests
+  - Function uploads metadata to IPFS, mints on-chain, and updates request with Hypercert ID
+  - Added "MINT HYPERCERT" button for APPROVED requests that haven't been minted yet
+  - Button only appears when: `status === 'APPROVED' && !hypercertId`
+  - Added display of minted Hypercert ID for completed requests
+  - Added display of rejection reason for REJECTED requests
+  - Refreshes request list after successful minting
+
+**Why**: Implements the final step of the Hypercert flow - actual on-chain minting via the Hypercerts SDK. Users can now mint their approved requests to the blockchain, completing the full workflow: submit → verifier approval → user mints on-chain. The separation of "approval" (verifier) and "minting" (user) ensures quality control while keeping minting costs on the user. Metadata is uploaded to IPFS first, then referenced in the on-chain Hypercert. This completes Phase 0-1 of the Hypercert implementation plan with real blockchain interaction on Celo Sepolia testnet.

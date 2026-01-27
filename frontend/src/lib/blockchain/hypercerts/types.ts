@@ -50,6 +50,7 @@ export interface HypercertRequest {
   requester: string
   metadata: any
   metadataCid?: string
+  hypercertId?: string  // 🆕 ID do Hypercert mintado on-chain
   status: HypercertRequestStatus
   submittedAt: number
   reviewedAt?: number

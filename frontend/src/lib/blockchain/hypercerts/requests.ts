@@ -103,6 +103,33 @@ export function rejectHypercertRequest(params: {
   return request
 }
 
+// Update a request with minted Hypercert ID (user action after minting)
+export function updateRequestWithHypercertId(
+  requestId: string,
+  hypercertId: string
+): HypercertRequest | null {
+  const requests = getAllHypercertRequests()
+  const request = requests.find(req => req.id === requestId)
+  
+  if (!request) {
+    console.error('Request not found:', requestId)
+    return null
+  }
+
+  request.hypercertId = hypercertId
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(requests))
+  }
+
+  console.log('✅ Request updated with Hypercert ID:', {
+    requestId,
+    hypercertId,
+  })
+  
+  return request
+}
+
 // Clear all requests (for testing)
 export function clearAllHypercertRequests(): void {
   if (typeof window !== 'undefined') {

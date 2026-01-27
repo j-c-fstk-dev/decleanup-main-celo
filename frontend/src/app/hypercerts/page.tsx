@@ -7,7 +7,7 @@ import { checkHypercertEligibility } from '@/lib/blockchain/hypercerts/eligibili
 import { aggregateUserCleanups } from '@/lib/blockchain/hypercerts/aggregation'
 import { buildHypercertMetadata } from '@/lib/blockchain/hypercerts/metadata'
 import { mintHypercert } from '@/lib/blockchain/hypercerts-minting'
-import { submitHypercertRequest, getHypercertRequestsByUser } from '@/lib/blockchain/hypercerts/requests'
+import { submitHypercertRequest, getHypercertRequestsByUser, updateRequestWithHypercertId } from '@/lib/blockchain/hypercerts/requests'
 
 export default function HypercertsTestPage() {
   const { address, isConnected } = useAccount()
@@ -142,6 +142,44 @@ export default function HypercertsTestPage() {
     } catch (error) {
       console.error('Error submitting Hypercert request:', error)
       setSubmitResult(`Error: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  const handleMintApprovedRequest = async (requestId: string) => {
+    if (!address) return
+
+    const request = userRequests.find(r => r.id === requestId)
+    if (!request || request.status !== 'APPROVED') {
+      setSubmitResult('Error: Request not found or not approved')
+      return
+    }
+
+    setSubmitResult('Minting Hypercert...')
+    try {
+      console.log('🪙 Minting approved request:', requestId)
+
+      // Mint Hypercert with the approved metadata
+      const result = await mintHypercert(address, request.metadata)
+
+      console.log('✅ Hypercert minted:', result)
+
+      // Update request with hypercert ID
+      updateRequestWithHypercertId(requestId, result.hypercertId)
+
+      // Refresh requests list
+      const updatedRequests = getHypercertRequestsByUser(address)
+      setUserRequests(updatedRequests)
+
+      setSubmitResult(
+        `Hypercert minted successfully!\n\n` +
+        `Transaction: ${result.txHash}\n` +
+        `Hypercert ID: ${result.hypercertId}\n` +
+        `Metadata CID: ${result.metadataCid}\n\n` +
+        `Your Hypercert is now on-chain!`
+      )
+    } catch (error) {
+      console.error('Error minting Hypercert:', error)
+      setSubmitResult(`Minting failed: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -337,6 +375,24 @@ export default function HypercertsTestPage() {
                       {request.reviewedAt && (
                         <div className="text-xs text-muted-foreground">
                           Reviewed: {new Date(request.reviewedAt).toLocaleDateString()}
+                        </div>
+                      )}
+                      {request.hypercertId && (
+                        <div className="text-xs text-brand-green mt-2">
+                          ✅ Minted: {request.hypercertId}
+                        </div>
+                      )}
+                      {request.status === 'APPROVED' && !request.hypercertId && (
+                        <button
+                          onClick={() => handleMintApprovedRequest(request.id)}
+                          className="mt-2 w-full gap-2 bg-brand-green py-2 font-bebas text-sm tracking-wider text-black hover:bg-brand-green/80 rounded-md transition-all flex items-center justify-center"
+                        >
+                          🪙 MINT HYPERCERT
+                        </button>
+                      )}
+                      {request.status === 'REJECTED' && request.rejectionReason && (
+                        <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-400">
+                          Reason: {request.rejectionReason}
                         </div>
                       )}
                     </div>
