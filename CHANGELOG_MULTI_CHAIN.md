@@ -53,10 +53,13 @@ Integrate the Base network (8453) into the dApp as a "Simple" option (basic clea
 - Updated `frontend/src/components/dashboard/DashboardActions.tsx` to hide Celo-specific action buttons (Impact Certificate/Hypercerts, Apply for funding/Sponsor, Create/Join Impact Circle) when the user is on the Base network.
 - Ensured the Base experience focuses strictly on the simple cleanup loop (Submit -> Verify -> Claim).
 
+### 8. Environment Documentation
+- Updated `frontend/ENV_TEMPLATE.md` with a new "Base Network (Multi-Chain Support)" section.
+- Documented all new `NEXT_PUBLIC_BASE_*` variables for RPC URLs and contract addresses, allowing developers to override hardcoded defaults if needed.
+
 ## Next Steps (Pending Proposal Approval)
 
 - **Base Simple Flow Wiring**: Test submit/verify/claim flows on Base against the mapped contracts.
 - **Conversion Ratio & ClaimVault UI**: Once the governance proposal passes, implement the `$bDCU -> $cDCU` conversion UI on the Celo side.
-- **ENV Template Update**: Update `frontend/ENV_TEMPLATE.md` with the new Base variables (`NEXT_PUBLIC_BASE_RPC_URL`, `NEXT_PUBLIC_BASE_BDCU_TOKEN_ADDRESS`, etc.).
 - **QA/Security**: Verify ABI parity between Celo and Base contracts.
 - **Workstream D (Mini App Sunset)**: Explicitly skipped per audio briefing instructions.
